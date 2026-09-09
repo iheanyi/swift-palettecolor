@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (Swift ${{ matrix.swift }})
+    runs-on: ubuntu-latest
+    container: swift:${{ matrix.swift }}
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["5.10", "6.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+      - run: swift test
+
+  macos:
+    name: macOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+      - run: swift test
+      - name: Test on iOS Simulator (UIKit paths)
+        run: |
+          set -euo pipefail
+
+          # The auto-generated scheme name for a bare package varies by Xcode version
+          # (Xcode 16.4 exposes only "swift-palettecolor"; older/other setups expose
+          # "<name>-Package" or per-product schemes), so discover it instead of guessing.
+          xcodebuild -list -json > /tmp/xcodebuild-list.json
+          SCHEMES=$(jq -r '[.workspace.schemes // [], .project.schemes // []] | add | .[]' /tmp/xcodebuild-list.json)
+          echo "Available schemes:"; echo "$SCHEMES"
+          SCHEME=""
+          for candidate in swift-palettecolor-Package swift-palettecolor PaletteColor; do
+            if grep -qx "$candidate" <<< "$SCHEMES"; then SCHEME="$candidate"; break; fi
+          done
+          if [ -z "$SCHEME" ]; then SCHEME=$(head -n 1 <<< "$SCHEMES"); fi
+          test -n "$SCHEME"
+
+          # Pick whichever iPhone simulator this runner actually has instead of hardcoding a name.
+          DEVICE=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))] | sort_by(.name) | last | .udid')
+          test -n "$DEVICE" && test "$DEVICE" != "null"
+          echo "Scheme: $SCHEME"; echo "Simulator: $DEVICE"
+
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild-test.log
+
+          # Guard against a scheme whose Test action silently contains no test bundle.
+          grep -q "PaletteUIKitTests" /tmp/xcodebuild-test.log
