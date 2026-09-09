@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (Swift ${{ matrix.swift }})
+    runs-on: ubuntu-latest
+    container: swift:${{ matrix.swift }}
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["5.10", "6.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+      - run: swift test
+
+  macos:
+    name: macOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+      - run: swift test
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -scheme PaletteColor \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO
