@@ -1,0 +1,51 @@
+swift-palettecolor (PaletteColor)
+Copyright 2026 the swift-palettecolor authors.
+
+This product is licensed under the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------------
+AndroidX Palette attribution
+--------------------------------------------------------------------------------
+
+The AndroidX-compatible palette extraction in this package follows the Android
+Open Source Project's AndroidX Palette implementation at commit
+81432a7d3a860faea8b18fb2a4712f1d6420f705:
+https://github.com/androidx/androidx/tree/81432a7d3a860faea8b18fb2a4712f1d6420f705/palette/palette/src/main/java/androidx/palette/graphics
+
+Specifically:
+
+  Sources/PaletteColor/Palette.swift
+      mirrors Palette.java and Target.java (default targets, scoring weights,
+      DEFAULT_FILTER, default resize area and color count) and
+      androidx.core.graphics.ColorUtils.RGBToHSL.
+
+  Sources/PaletteColor/ColorCutQuantizer.swift
+      mirrors ColorCutQuantizer.java (RGB555 histogram, Vbox median cut,
+      average-color swatch generation).
+
+  Sources/PaletteColor/Palette+CoreGraphics.swift
+      mirrors Palette.Builder's area-based bitmap downscale
+      (Bitmap.createScaledBitmap with filter = false).
+
+Copyright 2018 The Android Open Source Project.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+--------------------------------------------------------------------------------
+Origin
+--------------------------------------------------------------------------------
+
+This package was extracted from the Swift port of AndroidX Palette originally
+written for Camper (ios/iosApp/ArtworkPalette.swift in iheanyi/coda-android).
+The Camper-specific image loading, caching and SwiftUI view code was not
+carried over; only the palette math, contrast helpers and semantic role
+derivation are included here.
