@@ -34,8 +34,30 @@ jobs:
       - run: swift test
       - name: Test on iOS Simulator (UIKit paths)
         run: |
+          set -euo pipefail
+
+          # xcodebuild only auto-generates per-product schemes for a bare package; the
+          # "<name>-Package" scheme exists only after Xcode itself has opened the package.
+          xcodebuild -list -json > /tmp/xcodebuild-list.json
+          SCHEMES=$(jq -r '[.workspace.schemes // [], .project.schemes // []] | add | .[]' /tmp/xcodebuild-list.json)
+          echo "Available schemes:"; echo "$SCHEMES"
+          if grep -qx 'swift-palettecolor-Package' <<< "$SCHEMES"; then
+            SCHEME=swift-palettecolor-Package
+          else
+            SCHEME=PaletteColor
+          fi
+
+          # Pick whichever iPhone simulator this runner actually has instead of hardcoding a name.
+          DEVICE=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))] | sort_by(.name) | last | .udid')
+          test -n "$DEVICE" && test "$DEVICE" != "null"
+          echo "Scheme: $SCHEME"; echo "Simulator: $DEVICE"
+
           xcodebuild test \
-            -scheme swift-palettecolor-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
             -skipPackagePluginValidation \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild-test.log
+
+          # Guard against a scheme whose Test action silently contains no test bundle.
+          grep -q "PaletteUIKitTests" /tmp/xcodebuild-test.log
