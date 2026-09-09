@@ -139,18 +139,19 @@ public struct PaletteScheme: Hashable, Sendable {
     /// Black or white, whichever reads better on ``accent``.
     public var onAccent: RGBColor { accent.onColor }
 
-    public var primaryText: RGBColor { configuration.onSurface }
+    /// `onSurface` when it is readable on every wash stop, otherwise `onSurface` pushed toward
+    /// white or black until it is.
+    public var primaryText: RGBColor {
+        configuration.onSurface.readable(on: washStops, minimum: configuration.minimumContrast)
+    }
 
     /// `onSurfaceVariant` when it is readable on every wash stop, then `onSurface`, then
-    /// `onSurface` lifted until it is.
+    /// `onSurface` pushed toward white or black until it is.
     public var secondaryText: RGBColor {
         let minimum = configuration.minimumContrast
         let stops = washStops
         if stops.allSatisfy({ configuration.onSurfaceVariant.contrast(with: $0) >= minimum }) {
             return configuration.onSurfaceVariant
-        }
-        if stops.allSatisfy({ configuration.onSurface.contrast(with: $0) >= minimum }) {
-            return configuration.onSurface
         }
         return configuration.onSurface.readable(on: stops, minimum: minimum)
     }

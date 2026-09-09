@@ -32,10 +32,10 @@ jobs:
       - run: swift --version
       - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
       - run: swift test
-      - name: Build for iOS Simulator
+      - name: Test on iOS Simulator (UIKit paths)
         run: |
-          xcodebuild build \
-            -scheme PaletteColor \
-            -destination 'generic/platform=iOS Simulator' \
+          xcodebuild test \
+            -scheme swift-palettecolor-Package \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO

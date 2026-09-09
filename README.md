@@ -37,7 +37,9 @@ Or in Xcode: **File ▸ Add Package Dependencies…** and enter `https://github.
 import PaletteColor
 
 // UIImage / NSImage / CGImage — the image is downscaled by area to 112×112
-// (nearest neighbour, like Palette.Builder) before quantization.
+// (nearest neighbour, like Palette.Builder) before quantization. UIImages are
+// first redrawn orientation-correct (EXIF rotation/mirroring applied) instead of
+// reading the raw `cgImage`.
 // `retryLightnessOnly` reruns with a lightness-only filter if AndroidX's default
 // filter rejects every color (mostly-red artwork), so roles are still produced.
 guard let palette = Palette.generate(image: artwork, retryLightnessOnly: true) else { return }
@@ -71,7 +73,7 @@ With the default `retryLightnessOnly: false`, `Palette.generate` behaves exactly
 
 ### Build a readable color scheme
 
-`PaletteScheme` turns a palette into semantic roles: a three-stop background wash from the dark-muted and vibrant swatches, an accent pushed toward white (dark surfaces) or black (light surfaces) until it hits 4.5:1 against every wash stop, black-or-white `onAccent`, and primary/secondary text that stays readable on the wash. Extraction always includes the lightness-only retry.
+`PaletteScheme` turns a palette into semantic roles: a three-stop background wash from the dark-muted and vibrant swatches, an accent pushed toward white (dark surfaces) or black (light surfaces) until it hits 4.5:1 against every wash stop, black-or-white `onAccent`, and primary/secondary text roles that are pushed the same way whenever the configured neutrals fall short on a wash stop. Extraction always includes the lightness-only retry.
 
 ```swift
 let scheme = PaletteScheme(image: artwork) ?? .neutral
@@ -125,7 +127,7 @@ accent.color / accent.uiColor / accent.nsColor / accent.cgColor
 
 | Type | Purpose |
 | --- | --- |
-| `Palette` | Result of extraction: `swatches`, `dominant`, `selected`, and `vibrant`/`darkVibrant`/`lightVibrant`/`muted`/`darkMuted`/`lightMuted`. `Palette.generate(pixels:maxColors:filter:retryLightnessOnly:)`, `Palette.generate(image:maxColors:filter:retryLightnessOnly:resizeArea:)` (CGImage/UIImage/NSImage), `Palette.pixels(from:resizeArea:)`. |
+| `Palette` | Result of extraction: `swatches`, `dominant`, `selected`, and `vibrant`/`darkVibrant`/`lightVibrant`/`muted`/`darkMuted`/`lightMuted`. `Palette.generate(pixels:maxColors:filter:retryLightnessOnly:)`, `Palette.generate(image:maxColors:filter:retryLightnessOnly:resizeArea:)` (CGImage/UIImage/NSImage), `Palette.pixels(from:resizeArea:)` (CGImage/UIImage). |
 | `Palette.Swatch` | `rgb` (0xRRGGBB), `population`, `red`/`green`/`blue`, `hsl`, `color`, `swiftUIColor`. |
 | `Palette.Target` | The six AndroidX targets with `saturationRange` and `lightnessRange`. |
 | `Palette.Filter` | `.standard` (AndroidX `DEFAULT_FILTER`) or `.lightnessOnly`. |
@@ -136,7 +138,9 @@ accent.color / accent.uiColor / accent.nsColor / accent.cgColor
 
 ## Platform notes
 
-The extraction core (`Palette`, `ColorCutQuantizer`, `HSL`, `RGBColor`, `PaletteScheme`) depends only on Foundation and runs anywhere Swift does. `Palette.pixels(from: CGImage)` and the `UIImage`/`NSImage`/`UIColor`/`NSColor`/SwiftUI conveniences are compiled only where those frameworks exist (`#if canImport(...)`). On Linux, `swift test` runs everything except the CoreGraphics-backed tests.
+The extraction core (`Palette`, `ColorCutQuantizer`, `HSL`, `RGBColor`, `PaletteScheme`) depends only on Foundation and runs anywhere Swift does. `Palette.pixels(from: CGImage)` and the `UIImage`/`NSImage`/`UIColor`/`NSColor`/SwiftUI conveniences are compiled only where those frameworks exist (`#if canImport(...)`). On Linux, `swift test` runs everything except the CoreGraphics- and UIKit-backed tests.
+
+On UIKit platforms, `UIImage` inputs go through `UIImage.paletteNormalizedCGImage()`: images that are already `.up` and CGImage-backed are used directly, everything else is redrawn at native pixel size with `UIGraphicsImageRenderer` so `imageOrientation` is honoured (on watchOS, where the renderer is unavailable, the raw `cgImage` is used).
 
 ## Development
 
@@ -145,7 +149,7 @@ swift build
 swift test
 ```
 
-CI runs `swift test` on Ubuntu (Swift 5.10 and 6.1) and macOS, and builds the library for the iOS Simulator.
+CI runs `swift test` on Ubuntu (Swift 5.10 and 6.1) and macOS, and runs the test bundle on the iOS Simulator to cover the UIKit paths.
 
 ## License
 

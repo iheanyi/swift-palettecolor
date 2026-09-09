@@ -147,6 +147,46 @@ final class PaletteSchemeTests: XCTestCase {
         XCTAssertEqual(yellow.onAccent, .white)
     }
 
+    func testPrimaryTextIsLiftedWhenOnSurfaceIsNotReadableOnLightWash() {
+        // A mid grey onSurface reads fine on plain white but not on the tinted wash stops.
+        let light = PaletteScheme.Configuration(
+            surface: .white,
+            fallbackAccent: RGBColor(rgb: 0x0077AA),
+            onSurface: RGBColor(rgb: 0x777777),
+            onSurfaceVariant: RGBColor(rgb: 0x999999)
+        )
+        let scheme = PaletteScheme(seed: .black, configuration: light)
+        XCTAssertFalse(scheme.washStops.allSatisfy { light.onSurface.contrast(with: $0) >= 4.5 })
+
+        XCTAssertNotEqual(scheme.primaryText, light.onSurface)
+        XCTAssertLessThan(scheme.primaryText.luminance, light.onSurface.luminance)
+        for stop in scheme.washStops {
+            XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5)
+            XCTAssertGreaterThanOrEqual(scheme.secondaryText.contrast(with: stop), 4.5)
+        }
+        // Secondary falls through onSurfaceVariant to the same lifted onSurface.
+        XCTAssertEqual(scheme.secondaryText, scheme.primaryText)
+    }
+
+    func testPrimaryTextIsLiftedTowardWhiteOnDarkWashWhenOnSurfaceIsDim() {
+        let dim = PaletteScheme.Configuration(onSurface: RGBColor(rgb: 0x707070), onSurfaceVariant: RGBColor(rgb: 0x606060))
+        let scheme = PaletteScheme(
+            seed: RGBColor(rgb: 0x2070D8),
+            darkMuted: RGBColor(rgb: 0x203050),
+            configuration: dim
+        )
+        XCTAssertNotEqual(scheme.primaryText, dim.onSurface)
+        XCTAssertGreaterThan(scheme.primaryText.luminance, dim.onSurface.luminance)
+        for stop in scheme.washStops {
+            XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5)
+        }
+    }
+
+    func testPrimaryTextStaysOnSurfaceWhenAlreadyReadable() {
+        let scheme = PaletteScheme(seed: RGBColor(rgb: 0x2070D8), darkMuted: RGBColor(rgb: 0x101020))
+        XCTAssertEqual(scheme.primaryText, configuration.onSurface)
+    }
+
     func testCustomConfigurationDrivesSurfaceAndThresholds() {
         let custom = PaletteScheme.Configuration(
             surface: RGBColor(rgb: 0x000000),
