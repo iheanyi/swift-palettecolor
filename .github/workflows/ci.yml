@@ -36,16 +36,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          # xcodebuild only auto-generates per-product schemes for a bare package; the
-          # "<name>-Package" scheme exists only after Xcode itself has opened the package.
+          # The auto-generated scheme name for a bare package varies by Xcode version
+          # (Xcode 16.4 exposes only "swift-palettecolor"; older/other setups expose
+          # "<name>-Package" or per-product schemes), so discover it instead of guessing.
           xcodebuild -list -json > /tmp/xcodebuild-list.json
           SCHEMES=$(jq -r '[.workspace.schemes // [], .project.schemes // []] | add | .[]' /tmp/xcodebuild-list.json)
           echo "Available schemes:"; echo "$SCHEMES"
-          if grep -qx 'swift-palettecolor-Package' <<< "$SCHEMES"; then
-            SCHEME=swift-palettecolor-Package
-          else
-            SCHEME=PaletteColor
-          fi
+          SCHEME=""
+          for candidate in swift-palettecolor-Package swift-palettecolor PaletteColor; do
+            if grep -qx "$candidate" <<< "$SCHEMES"; then SCHEME="$candidate"; break; fi
+          done
+          if [ -z "$SCHEME" ]; then SCHEME=$(head -n 1 <<< "$SCHEMES"); fi
+          test -n "$SCHEME"
 
           # Pick whichever iPhone simulator this runner actually has instead of hardcoding a name.
           DEVICE=$(xcrun simctl list devices available -j \
