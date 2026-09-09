@@ -61,6 +61,15 @@ final class PaletteCoreGraphicsTests: XCTestCase {
         XCTAssertEqual(palette.dominant?.population, 112 * 112)
     }
 
+    func testGenerateFromImageRetriesWithLightnessOnlyFilter() throws {
+        let image = try makeImage(width: 2, height: 2, rgba: Array(repeating: [0xD0, 0x60, 0x40, 0xFF], count: 4).flatMap { $0 })
+        let standard = try XCTUnwrap(Palette.generate(image: image))
+        XCTAssertTrue(standard.isEmpty)
+        let retried = try XCTUnwrap(Palette.generate(image: image, retryLightnessOnly: true))
+        XCTAssertEqual(retried.dominant?.rgb, 0xD06040)
+        XCTAssertNotNil(retried.vibrant)
+    }
+
     func testSchemeFromImage() throws {
         let image = try makeImage(width: 2, height: 2, rgba: [
             0x20, 0x70, 0xD8, 0xFF,

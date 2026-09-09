@@ -67,23 +67,41 @@ public struct RGBColor: Hashable, Sendable {
         (max(luminance, other.luminance) + 0.05) / (min(luminance, other.luminance) + 0.05)
     }
 
-    /// Lifts this color toward white until it reaches `minimum` contrast against every background.
+    /// Moves this color toward white or black until it reaches `minimum` contrast against every
+    /// background.
     ///
-    /// The color is returned unchanged when it is already lighter than each background and meets
-    /// the minimum. Otherwise a binary search finds the smallest white mix that satisfies all
-    /// backgrounds. This is the "4.5:1 accent lift" used for palette accents on dark washes.
+    /// The color is returned unchanged when it already meets the minimum against each background.
+    /// Otherwise the lift direction is whichever neutral (white or black) contrasts best with the
+    /// backgrounds as a whole, so dark washes lift accents toward white and light surfaces pull
+    /// them toward black. A binary search then finds the smallest mix in that direction that
+    /// satisfies every background. If the preferred neutral cannot reach the minimum against all
+    /// backgrounds the other direction is tried; if neither can, the better neutral is returned.
     public func readable(on backgrounds: [RGBColor], minimum: Double = 4.5) -> RGBColor {
-        if backgrounds.allSatisfy({ luminance > $0.luminance && contrast(with: $0) >= minimum }) { return self }
-        var low = 0.0, high = 1.0
-        for _ in 0..<20 {
-            let middle = (low + high) / 2
-            if backgrounds.allSatisfy({ mixed(with: .white, fraction: middle).contrast(with: $0) >= minimum }) {
-                high = middle
-            } else {
-                low = middle
-            }
+        guard !backgrounds.isEmpty else { return self }
+        func satisfies(_ candidate: RGBColor) -> Bool {
+            backgrounds.allSatisfy { candidate.contrast(with: $0) >= minimum }
         }
-        return mixed(with: .white, fraction: high)
+        func worstContrast(_ candidate: RGBColor) -> Double {
+            backgrounds.map { candidate.contrast(with: $0) }.min() ?? 0
+        }
+        if satisfies(self) { return self }
+
+        let whiteContrast = worstContrast(.white)
+        let blackContrast = worstContrast(.black)
+        let directions: [RGBColor] = whiteContrast >= blackContrast ? [.white, .black] : [.black, .white]
+        for target in directions where satisfies(target) {
+            var low = 0.0, high = 1.0
+            for _ in 0..<20 {
+                let middle = (low + high) / 2
+                if satisfies(mixed(with: target, fraction: middle)) {
+                    high = middle
+                } else {
+                    low = middle
+                }
+            }
+            return mixed(with: target, fraction: high)
+        }
+        return directions[0]
     }
 
     /// Black or white, whichever has the higher contrast against this color.

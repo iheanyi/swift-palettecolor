@@ -62,20 +62,24 @@ extension Palette {
 
     /// Downscales `image` like the Android builder and generates a palette from it.
     /// Returns `nil` when pixels cannot be read from the image.
+    ///
+    /// Pass `retryLightnessOnly: true` to rerun with ``Filter/lightnessOnly`` when `filter`
+    /// rejects every color, the same second pass ``PaletteScheme`` always performs.
     public static func generate(
         image: CGImage,
         maxColors: Int = defaultColorCount,
         filter: Filter = .standard,
+        retryLightnessOnly: Bool = false,
         resizeArea: Int = defaultResizeArea
     ) -> Palette? {
         guard let pixels = pixels(from: image, resizeArea: resizeArea) else { return nil }
-        return generate(pixels: pixels, maxColors: maxColors, filter: filter)
+        return generate(pixels: pixels, maxColors: maxColors, filter: filter, retryLightnessOnly: retryLightnessOnly)
     }
 }
 
 extension PaletteScheme {
-    /// Extracts a palette from `image` (standard filter, then the lightness-only fallback) and
-    /// builds a scheme from it. Returns `nil` when the image yields no swatches.
+    /// Extracts a palette from `image` (standard filter, retrying with the lightness-only filter)
+    /// and builds a scheme from it. Returns `nil` when the image yields no swatches.
     public init?(image: CGImage, maxColors: Int = Palette.defaultColorCount, configuration: Configuration = .default) {
         guard let pixels = Palette.pixels(from: image) else { return nil }
         self.init(pixels: pixels, maxColors: maxColors, configuration: configuration)

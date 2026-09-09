@@ -94,7 +94,7 @@ public struct PaletteScheme: Hashable, Sendable {
     /// ``Palette/Filter/lightnessOnly`` when the standard filter rejects every color, and builds a
     /// scheme from the result. Returns `nil` when neither pass yields a swatch.
     public init?(pixels: [UInt32], maxColors: Int = Palette.defaultColorCount, configuration: Configuration = .default) {
-        let palette = Palette.generate(pixels: pixels, maxColors: maxColors, fallbacks: [.lightnessOnly])
+        let palette = Palette.generate(pixels: pixels, maxColors: maxColors, retryLightnessOnly: true)
         self.init(palette: palette, configuration: configuration)
     }
 
@@ -128,8 +128,8 @@ public struct PaletteScheme: Hashable, Sendable {
         ]
     }
 
-    /// The control accent: the lightest colorful role swatch, lifted toward white until it meets
-    /// `minimumContrast` against every wash stop.
+    /// The control accent: the lightest colorful role swatch, pushed toward white (dark surfaces)
+    /// or black (light surfaces) until it meets `minimumContrast` against every wash stop.
     public var accent: RGBColor {
         let controlSeed = lightVibrant ?? lightMuted ?? vibrant
         let base = controlSeed.chroma >= configuration.minimumAccentChroma ? controlSeed : configuration.fallbackAccent

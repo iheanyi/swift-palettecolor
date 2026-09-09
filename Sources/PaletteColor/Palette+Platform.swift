@@ -8,15 +8,24 @@ import UIKit
 
 extension Palette {
     /// Generates a palette from the image's backing `CGImage`. Returns `nil` when the image has no
-    /// `CGImage` (for example, CIImage-backed images) or pixels cannot be read.
+    /// `CGImage` (for example, CIImage-backed images) or pixels cannot be read. See
+    /// ``Palette/generate(image:maxColors:filter:retryLightnessOnly:resizeArea:)`` for the
+    /// lightness-only retry.
     public static func generate(
         image: UIImage,
         maxColors: Int = defaultColorCount,
         filter: Filter = .standard,
+        retryLightnessOnly: Bool = false,
         resizeArea: Int = defaultResizeArea
     ) -> Palette? {
         guard let cgImage = image.cgImage else { return nil }
-        return generate(image: cgImage, maxColors: maxColors, filter: filter, resizeArea: resizeArea)
+        return generate(
+            image: cgImage,
+            maxColors: maxColors,
+            filter: filter,
+            retryLightnessOnly: retryLightnessOnly,
+            resizeArea: resizeArea
+        )
     }
 }
 
@@ -49,10 +58,17 @@ extension Palette {
         image: NSImage,
         maxColors: Int = defaultColorCount,
         filter: Filter = .standard,
+        retryLightnessOnly: Bool = false,
         resizeArea: Int = defaultResizeArea
     ) -> Palette? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        return generate(image: cgImage, maxColors: maxColors, filter: filter, resizeArea: resizeArea)
+        return generate(
+            image: cgImage,
+            maxColors: maxColors,
+            filter: filter,
+            retryLightnessOnly: retryLightnessOnly,
+            resizeArea: resizeArea
+        )
     }
 }
 

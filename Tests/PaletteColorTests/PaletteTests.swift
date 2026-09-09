@@ -42,15 +42,27 @@ final class PaletteTests: XCTestCase {
         let nearRed = Array(repeating: UInt32(0xD06040), count: 12)
         XCTAssertTrue(Palette.generate(pixels: nearRed).isEmpty)
         XCTAssertEqual(Palette.generate(pixels: nearRed, filter: .lightnessOnly).swatches.count, 1)
-        XCTAssertEqual(Palette.generate(pixels: nearRed, fallbacks: [.lightnessOnly]).swatches.count, 1)
+        XCTAssertEqual(Palette.generate(pixels: nearRed, retryLightnessOnly: true).swatches.count, 1)
+        // The retry is a no-op when the caller already asked for the lightness-only filter.
+        XCTAssertEqual(
+            Palette.generate(pixels: nearRed, filter: .lightnessOnly, retryLightnessOnly: true),
+            Palette.generate(pixels: nearRed, filter: .lightnessOnly)
+        )
     }
 
-    func testFallbacksAreNotUsedWhenStandardFilterSucceeds() {
+    func testRetryIsNotUsedWhenStandardFilterSucceeds() {
         let mixed: [UInt32] = Array(repeating: 0x2070D8, count: 4) + Array(repeating: 0xD06040, count: 12)
         let standard = Palette.generate(pixels: mixed)
-        let withFallback = Palette.generate(pixels: mixed, fallbacks: [.lightnessOnly])
-        XCTAssertEqual(standard, withFallback)
+        let withRetry = Palette.generate(pixels: mixed, retryLightnessOnly: true)
+        XCTAssertEqual(standard, withRetry)
         XCTAssertEqual(standard.swatches.map(\.rgb), [0x2070D8])
+    }
+
+    func testRetryYieldsRolesForRedILineArtwork() {
+        let nearRed = Array(repeating: UInt32(0xD06040), count: 12)
+        let palette = Palette.generate(pixels: nearRed, retryLightnessOnly: true)
+        XCTAssertEqual(palette.dominant?.rgb, 0xD06040)
+        XCTAssertNotNil(palette.vibrant)
     }
 
     func testEmptyInputProducesEmptyPalette() {

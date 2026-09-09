@@ -118,6 +118,35 @@ final class PaletteSchemeTests: XCTestCase {
         }
     }
 
+    func testLightConfigurationKeepsAccentAndTextReadable() {
+        let light = PaletteScheme.Configuration(
+            surface: .white,
+            fallbackAccent: RGBColor(rgb: 0x0077AA),
+            onSurface: RGBColor(rgb: 0x1B1B1F),
+            onSurfaceVariant: RGBColor(rgb: 0x46464F)
+        )
+        for seed in [
+            RGBColor(rgb: 0xFFEE55),   // pale yellow: must darken toward black
+            RGBColor(rgb: 0x6FD8E8),   // pale cyan
+            RGBColor(rgb: 0x2070D8),   // mid blue
+            RGBColor(rgb: 0xC0C0C0),   // grey: falls back
+            .black,
+        ] {
+            let scheme = PaletteScheme(seed: seed, configuration: light)
+            XCTAssertEqual(scheme.washStops.last, .white)
+            for stop in scheme.washStops {
+                XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: stop), 4.5, "accent for \(seed)")
+                XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5, "primary for \(seed)")
+                XCTAssertGreaterThanOrEqual(scheme.secondaryText.contrast(with: stop), 4.5, "secondary for \(seed)")
+            }
+            XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: scheme.onAccent), 4.5)
+        }
+
+        let yellow = PaletteScheme(seed: RGBColor(rgb: 0xFFEE55), configuration: light)
+        XCTAssertLessThan(yellow.accent.luminance, RGBColor(rgb: 0xFFEE55).luminance)
+        XCTAssertEqual(yellow.onAccent, .white)
+    }
+
     func testCustomConfigurationDrivesSurfaceAndThresholds() {
         let custom = PaletteScheme.Configuration(
             surface: RGBColor(rgb: 0x000000),

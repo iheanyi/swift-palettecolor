@@ -38,7 +38,9 @@ import PaletteColor
 
 // UIImage / NSImage / CGImage — the image is downscaled by area to 112×112
 // (nearest neighbour, like Palette.Builder) before quantization.
-guard let palette = Palette.generate(image: artwork) else { return }
+// `retryLightnessOnly` reruns with a lightness-only filter if AndroidX's default
+// filter rejects every color (mostly-red artwork), so roles are still produced.
+guard let palette = Palette.generate(image: artwork, retryLightnessOnly: true) else { return }
 
 palette.vibrant?.rgb          // 0xRRGGBB packed
 palette.darkMuted?.color      // RGBColor with Double channels
@@ -58,15 +60,18 @@ let palette = Palette.generate(pixels: pixels)
 
 ### Filters
 
-`Palette.Filter.standard` is AndroidX's `DEFAULT_FILTER` (rejects near-black, near-white and the red I-line). Images that are mostly red can yield no swatches under that filter, so a `lightnessOnly` filter is available as a second pass:
+`Palette.Filter.standard` is AndroidX's `DEFAULT_FILTER` (rejects near-black, near-white and the red I-line). Images that are mostly red can yield no swatches under that filter. Pass `retryLightnessOnly: true` to any `generate` call to run one more pass with `.lightnessOnly` (only the lightness bounds) when the first pass comes back empty; `PaletteScheme` always does this.
 
 ```swift
-let palette = Palette.generate(pixels: pixels, fallbacks: [.lightnessOnly])
+let palette = Palette.generate(pixels: pixels, retryLightnessOnly: true)
+let fromImage = Palette.generate(image: artwork, retryLightnessOnly: true)
 ```
+
+With the default `retryLightnessOnly: false`, `Palette.generate` behaves exactly like AndroidX and may return an empty palette.
 
 ### Build a readable color scheme
 
-`PaletteScheme` turns a palette into semantic roles: a three-stop background wash from the dark-muted and vibrant swatches, an accent lifted toward white until it hits 4.5:1 against every wash stop, black-or-white `onAccent`, and primary/secondary text that stays readable on the wash.
+`PaletteScheme` turns a palette into semantic roles: a three-stop background wash from the dark-muted and vibrant swatches, an accent pushed toward white (dark surfaces) or black (light surfaces) until it hits 4.5:1 against every wash stop, black-or-white `onAccent`, and primary/secondary text that stays readable on the wash. Extraction always includes the lightness-only retry.
 
 ```swift
 let scheme = PaletteScheme(image: artwork) ?? .neutral
@@ -87,18 +92,18 @@ LinearGradient(
 Button("Play") { … }.tint(scheme.accent.color)
 ```
 
-The surface, fallback accent, neutral text roles and contrast threshold are all parameters. The defaults describe a dark surface with Material-style neutrals; pass your own to match your theme:
+The surface, fallback accent, neutral text roles and contrast threshold are all parameters. The defaults describe a dark surface with Material-style neutrals; pass your own to match your theme, including light ones:
 
 ```swift
-let configuration = PaletteScheme.Configuration(
-    surface: RGBColor(rgb: 0x000000),
-    fallbackAccent: RGBColor(rgb: 0x6FD8E8),
-    onSurface: .white,
-    onSurfaceVariant: RGBColor(rgb: 0xCCCCCC),
-    minimumContrast: 7,        // WCAG AAA
+let light = PaletteScheme.Configuration(
+    surface: .white,
+    fallbackAccent: RGBColor(rgb: 0x0077AA),
+    onSurface: RGBColor(rgb: 0x1B1B1F),
+    onSurfaceVariant: RGBColor(rgb: 0x46464F),
+    minimumContrast: 4.5,      // 7 for WCAG AAA
     minimumAccentChroma: 0.04  // greyer control seeds use fallbackAccent
 )
-let scheme = PaletteScheme(image: artwork, configuration: configuration)
+let scheme = PaletteScheme(image: artwork, configuration: light)
 ```
 
 ### Contrast helpers
@@ -109,7 +114,7 @@ let scheme = PaletteScheme(image: artwork, configuration: configuration)
 let accent = RGBColor(rgb: 0x2070D8)
 accent.luminance                       // WCAG relative luminance
 accent.contrast(with: .black)          // WCAG contrast ratio
-accent.readable(on: [surface], minimum: 4.5)  // lift toward white until readable
+accent.readable(on: [surface], minimum: 4.5)  // push toward white or black until readable
 accent.onColor                         // .black or .white
 accent.mixed(with: .white, fraction: 0.2)
 accent.chroma
@@ -120,12 +125,12 @@ accent.color / accent.uiColor / accent.nsColor / accent.cgColor
 
 | Type | Purpose |
 | --- | --- |
-| `Palette` | Result of extraction: `swatches`, `dominant`, `selected`, and `vibrant`/`darkVibrant`/`lightVibrant`/`muted`/`darkMuted`/`lightMuted`. `Palette.generate(pixels:maxColors:filter:)`, `Palette.generate(pixels:maxColors:fallbacks:)`, `Palette.generate(image:…)` (CGImage/UIImage/NSImage), `Palette.pixels(from:resizeArea:)`. |
+| `Palette` | Result of extraction: `swatches`, `dominant`, `selected`, and `vibrant`/`darkVibrant`/`lightVibrant`/`muted`/`darkMuted`/`lightMuted`. `Palette.generate(pixels:maxColors:filter:retryLightnessOnly:)`, `Palette.generate(image:maxColors:filter:retryLightnessOnly:resizeArea:)` (CGImage/UIImage/NSImage), `Palette.pixels(from:resizeArea:)`. |
 | `Palette.Swatch` | `rgb` (0xRRGGBB), `population`, `red`/`green`/`blue`, `hsl`, `color`, `swiftUIColor`. |
 | `Palette.Target` | The six AndroidX targets with `saturationRange` and `lightnessRange`. |
 | `Palette.Filter` | `.standard` (AndroidX `DEFAULT_FILTER`) or `.lightnessOnly`. |
 | `HSL` | `ColorUtils.RGBToHSL`-compatible conversion. |
-| `RGBColor` | sRGB color with `luminance`, `contrast(with:)`, `readable(on:minimum:)`, `onColor`, `mixed(with:fraction:)`, `chroma`, packed `rgb`, and platform color conversions. |
+| `RGBColor` | sRGB color with `luminance`, `contrast(with:)`, `readable(on:minimum:)` (moves toward white or black, whichever the backgrounds need), `onColor`, `mixed(with:fraction:)`, `chroma`, packed `rgb`, and platform color conversions. |
 | `PaletteScheme` | Semantic roles from a palette: `seed`, `darkMuted`, `vibrant`, `lightMuted`, `lightVibrant`, `washStops`, `accent`, `onAccent`, `primaryText`, `secondaryText`, `primaryContainer`, `secondaryContainer`, `surface`. `PaletteScheme(palette:)`, `PaletteScheme(pixels:)`, `PaletteScheme(image:)`, `.neutral`. |
 | `PaletteScheme.Configuration` | `surface`, `fallbackAccent`, `onSurface`, `onSurfaceVariant`, `minimumContrast`, `minimumAccentChroma`. |
 

@@ -166,11 +166,24 @@ public struct Palette: Hashable, Sendable {
     /// This is equivalent to `Palette.from(bitmap).maximumColorCount(maxColors).generate()` on
     /// Android for an already-resized bitmap. Use ``pixels(from:resizeArea:)`` to produce the
     /// pixel vector from a `CGImage` with the same area-based downscale the Android builder applies.
+    ///
+    /// - Parameter retryLightnessOnly: When `true` and `filter` rejects every color (for example,
+    ///   mostly-red artwork under the standard filter's I-line rule), the extraction is run once
+    ///   more with ``Filter/lightnessOnly`` so the image still yields swatches and roles.
     public static func generate(
         pixels: [UInt32],
         maxColors: Int = defaultColorCount,
-        filter: Filter = .standard
+        filter: Filter = .standard,
+        retryLightnessOnly: Bool = false
     ) -> Palette {
+        let palette = generateOnce(pixels: pixels, maxColors: maxColors, filter: filter)
+        if retryLightnessOnly, palette.isEmpty, filter != .lightnessOnly {
+            return generateOnce(pixels: pixels, maxColors: maxColors, filter: .lightnessOnly)
+        }
+        return palette
+    }
+
+    private static func generateOnce(pixels: [UInt32], maxColors: Int, filter: Filter) -> Palette {
         let swatches = ColorCutQuantizer.quantize(pixels: pixels, maxColors: maxColors, filter: filter)
         let dominant = swatches.max { $0.population < $1.population }
         var selected: [Target: Swatch] = [:]
@@ -201,20 +214,5 @@ public struct Palette: Hashable, Sendable {
             }
         }
         return Palette(swatches: swatches, dominant: dominant, selected: selected)
-    }
-
-    /// Generates a palette with the `.standard` filter and, when that rejects every pixel, retries
-    /// with each subsequent filter in `fallbacks`. Returns the first non-empty result, or the last
-    /// (empty) attempt.
-    public static func generate(
-        pixels: [UInt32],
-        maxColors: Int = defaultColorCount,
-        fallbacks: [Filter]
-    ) -> Palette {
-        var palette = generate(pixels: pixels, maxColors: maxColors, filter: .standard)
-        for filter in fallbacks where palette.isEmpty {
-            palette = generate(pixels: pixels, maxColors: maxColors, filter: filter)
-        }
-        return palette
     }
 }
