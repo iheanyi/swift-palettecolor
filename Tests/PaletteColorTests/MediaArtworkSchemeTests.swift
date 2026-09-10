@@ -165,20 +165,36 @@ final class MediaArtworkSchemeTests: XCTestCase {
         XCTAssertEqual(HCT(scheme.accent).tone, 90, accuracy: 0.5)
     }
 
-    func testMissingArtworkIsMutedNeutral() {
+    func testMissingArtworkSchemeIsTheBrandSeedsN1Tone90Gray() {
+        // Android: fromSeed(Hct.from(CamperPlaybackAccent.hue, CamperPlaybackAccent.chroma / 8, 50)).
+        XCTAssertEqual(MediaArtworkScheme.camperPlaybackAccentRGB, brandCyan)
+        let brand = HCT(rgb: MediaArtworkScheme.camperPlaybackAccentRGB)
+        XCTAssertEqual(brand.hue, 209.389, accuracy: 0.01)
+        XCTAssertEqual(brand.chroma, 42.016, accuracy: 0.01)
+
         let scheme = MediaArtworkScheme.missingArtwork
-        // Same construction as Android's MissingArtwork: fromSeed(Hct(coolHue, smallChroma, 50)).
-        XCTAssertEqual(scheme, MediaArtworkScheme(seed: HCT(hue: 209, chroma: 4, tone: 50).color))
-        XCTAssertEqual(scheme.seedHCT.tone, 50, accuracy: 0.5)
-        XCTAssertFalse(scheme.isChromatic)
+        XCTAssertEqual(scheme, MediaArtworkScheme(seed: HCT(hue: brand.hue, chroma: brand.chroma / 8, tone: 50).color))
+        // Values resolved by the Android twin at 504e230.
+        XCTAssertEqual(scheme.seed.rgb, 0x737879)
+        XCTAssertEqual(scheme.seedHCT.chroma, 5.25, accuracy: 0.01)
+        XCTAssertEqual(scheme.seedHCT.tone, 50, accuracy: 0.1)
+        XCTAssertTrue(scheme.isChromatic)
+        XCTAssertEqual(scheme.accent.rgb, 0xDFE3E4)
+
         XCTAssertNotEqual(scheme.accent.rgb, brandCyan)
         XCTAssertNotEqual(scheme.seed, MediaArtworkScheme.fallbackSeed)
+        XCTAssertNotEqual(scheme, MediaArtworkScheme.unreadableArtwork)
         let accent = HCT(scheme.accent)
         XCTAssertEqual(accent.tone, 90, accuracy: 0.5)
-        XCTAssertLessThan(accent.chroma, 5)
+        XCTAssertLessThan(accent.chroma, 6)
         XCTAssertLessThan(scheme.accent.chroma, 0.03)   // near-grey in sRGB too
-        XCTAssertEqual(HCT(scheme.surface).tone, 20, accuracy: 0.5)
-        XCTAssertLessThan(HCT(scheme.surface).chroma, 5)
+    }
+
+    func testUnreadableArtworkIsTheGoogleBlueFallbackSeed() {
+        let scheme = MediaArtworkScheme.unreadableArtwork
+        XCTAssertEqual(scheme.seed.rgb, 0x1B6EF3)
+        XCTAssertEqual(scheme, MediaArtworkScheme(seed: MediaArtworkScheme.fallbackSeed))
+        XCTAssertEqual(scheme, MediaArtworkScheme(pixels: []))
     }
 
     func testSchemeIsDeterministicAndHashable() {

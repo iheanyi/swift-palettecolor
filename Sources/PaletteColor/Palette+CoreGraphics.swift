@@ -111,9 +111,14 @@ extension MediaArtworkScheme {
     }
 
     /// Downscales `image` like `WallpaperColors.fromBitmap`, quantizes it and builds the scheme.
-    /// Returns `nil` when pixels cannot be read from the image.
-    public init?(image: CGImage, maxArea: Int = maxBitmapArea) {
-        guard let pixels = Self.pixels(from: image, maxArea: maxArea) else { return nil }
+    /// When pixels cannot be read from the image the result is ``unreadableArtwork``
+    /// (`fromSeed(FallbackSeedArgb)`, Google Blue), matching Android's `mediaArtworkScheme(bitmap)`;
+    /// use ``missingArtwork`` yourself when there is no artwork at all.
+    public init(image: CGImage, maxArea: Int = maxBitmapArea) {
+        guard let pixels = Self.pixels(from: image, maxArea: maxArea) else {
+            self = .unreadableArtwork
+            return
+        }
         self.init(pixels: pixels)
     }
 }

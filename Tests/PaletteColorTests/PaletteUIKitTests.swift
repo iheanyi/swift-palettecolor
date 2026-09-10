@@ -97,18 +97,26 @@ final class PaletteUIKitTests: XCTestCase {
 
     func testMediaArtworkSchemeFromOrientedUIImageMatchesCGImage() throws {
         let cgImage = try makeCGImage()
-        let expected = try XCTUnwrap(MediaArtworkScheme(image: cgImage))
+        let expected = MediaArtworkScheme(image: cgImage)
         for orientation in [UIImage.Orientation.up, .down, .left, .rightMirrored] {
             let image = UIImage(cgImage: cgImage, scale: 1, orientation: orientation)
             let pixels = try XCTUnwrap(MediaArtworkScheme.pixels(from: image))
             XCTAssertEqual(pixels.count, 2, "\(orientation.rawValue)")
             // Orientation reorders pixels but not their colors, so the same seed wins (the redraw
             // may shift channels by a step or two, hence the tolerance rather than equality).
-            let scheme = try XCTUnwrap(MediaArtworkScheme(image: image))
+            let scheme = MediaArtworkScheme(image: image)
             XCTAssertEqual(scheme.seedHCT.hue, expected.seedHCT.hue, accuracy: 2, "\(orientation.rawValue)")
             XCTAssertEqual(scheme.seedHCT.tone, expected.seedHCT.tone, accuracy: 2, "\(orientation.rawValue)")
             XCTAssertEqual(HCT(scheme.accent).tone, 90, accuracy: 0.5, "\(orientation.rawValue)")
         }
+    }
+
+    func testUnreadableUIImageFallsBackToGoogleBlueNotMissingArtwork() {
+        // An empty UIImage has no CGImage and no drawable size, so pixels cannot be read.
+        let scheme = MediaArtworkScheme(image: UIImage())
+        XCTAssertEqual(scheme, .unreadableArtwork)
+        XCTAssertEqual(scheme.seed.rgb, 0x1B6EF3)
+        XCTAssertNotEqual(scheme, .missingArtwork)
     }
 
     func testUIColorConversion() {

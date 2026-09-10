@@ -99,12 +99,24 @@ public struct MediaArtworkScheme: Hashable, Sendable {
         self.init(pixels: Self.downscaled(pixels: pixels, width: width, height: height))
     }
 
-    /// A muted neutral for players with no artwork, built the way Android's `MissingArtwork` is:
-    /// `fromSeed(Hct(brandHue, brandChroma / 8, 50))`. The package does not import brand
-    /// constants, so the seed is a cool (cyan-family) hue at chroma 4 — below ``chromaCutoff``,
-    /// so ``isChromatic`` is `false` — giving a tone-90 muted grey accent, never a vivid color.
-    /// Seed your own launcher or brand-neutral color through ``init(seed:)`` to override it.
-    public static let missingArtwork = MediaArtworkScheme(seed: HCT(hue: 209, chroma: 4, tone: 50).color)
+    /// Camper's playback accent (`CamperPlaybackAccent`, `0xFF6FD8E8` on Android). Used only to
+    /// derive ``missingArtwork`` exactly as the Android twin does; it is never a scheme role.
+    public static let camperPlaybackAccentRGB: UInt32 = 0x6FD8E8
+
+    /// The scheme for players with no artwork, built exactly like Android's `MissingArtwork`:
+    /// `fromSeed(Hct.from(CamperPlaybackAccent.hue, CamperPlaybackAccent.chroma / 8, 50))`.
+    /// The seed resolves to `0x737879` (chroma ≈ 5.25, so ``isChromatic`` is `true`) and the
+    /// accent to `0xDFE3E4`: the brand's N1 tone-90 grey, never the vivid brand cyan.
+    ///
+    /// This is distinct from an image that cannot be decoded, which maps to ``fallbackSeed``
+    /// (Google Blue) like Android's `mediaArtworkScheme(bitmap)`.
+    public static let missingArtwork: MediaArtworkScheme = {
+        let brand = HCT(rgb: camperPlaybackAccentRGB)
+        return MediaArtworkScheme(seed: HCT(hue: brand.hue, chroma: brand.chroma / 8, tone: 50).color)
+    }()
+
+    /// `fromSeed(FallbackSeedArgb)`: the scheme for artwork that could not be read.
+    public static let unreadableArtwork = MediaArtworkScheme(seed: fallbackSeed)
 
     /// Any tone of any of the four palettes, for states the fixed roles do not cover.
     public func tone(_ tone: Double, of role: PaletteRole) -> RGBColor {

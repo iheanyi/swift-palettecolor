@@ -93,7 +93,7 @@ final class PaletteCoreGraphicsTests: XCTestCase {
         XCTAssertEqual(pixels.count, 112 * 112)
         XCTAssertTrue(pixels.allSatisfy { $0 == 0x2070D8 })
 
-        let scheme = try XCTUnwrap(MediaArtworkScheme(image: image))
+        let scheme = MediaArtworkScheme(image: image)
         XCTAssertEqual(scheme.seed.rgb, 0x2070D8)
         XCTAssertEqual(scheme, MediaArtworkScheme(pixels: pixels))
     }
@@ -116,7 +116,7 @@ final class PaletteCoreGraphicsTests: XCTestCase {
         // WallpaperColors truncates to 137×91; Palette.Builder would ceil to 138×92.
         XCTAssertEqual(pixels.count, 137 * 91)
         XCTAssertEqual(try XCTUnwrap(Palette.pixels(from: image)).count, 138 * 92)
-        let scheme = try XCTUnwrap(MediaArtworkScheme(image: image))
+        let scheme = MediaArtworkScheme(image: image)
         XCTAssertEqual(scheme.seedHCT.hue, 129, accuracy: 3)
     }
 

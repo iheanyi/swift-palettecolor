@@ -85,10 +85,13 @@ extension MediaArtworkScheme {
         return pixels(from: cgImage, maxArea: maxArea)
     }
 
-    /// Builds the scheme from an orientation-corrected rendering of `image`. Returns `nil` when
-    /// the image has no drawable content or pixels cannot be read.
-    public init?(image: UIImage, maxArea: Int = maxBitmapArea) {
-        guard let cgImage = image.paletteNormalizedCGImage() else { return nil }
+    /// Builds the scheme from an orientation-corrected rendering of `image`. Images with no
+    /// drawable content or unreadable pixels yield ``unreadableArtwork`` (Google Blue seed).
+    public init(image: UIImage, maxArea: Int = maxBitmapArea) {
+        guard let cgImage = image.paletteNormalizedCGImage() else {
+            self = .unreadableArtwork
+            return
+        }
         self.init(image: cgImage, maxArea: maxArea)
     }
 }
@@ -135,9 +138,13 @@ extension PaletteScheme {
 }
 
 extension MediaArtworkScheme {
-    /// Builds the scheme from the image's best `CGImage` representation.
-    public init?(image: NSImage, maxArea: Int = maxBitmapArea) {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    /// Builds the scheme from the image's best `CGImage` representation. Images without one
+    /// yield ``unreadableArtwork`` (Google Blue seed).
+    public init(image: NSImage, maxArea: Int = maxBitmapArea) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            self = .unreadableArtwork
+            return
+        }
         self.init(image: cgImage, maxArea: maxArea)
     }
 }
