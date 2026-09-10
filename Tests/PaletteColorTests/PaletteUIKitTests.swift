@@ -111,13 +111,34 @@ final class PaletteUIKitTests: XCTestCase {
         }
     }
 
+    /// `UIColor.systemBlue` resolved the same way `MediaArtworkScheme.systemBlueSeed` does it.
+    private func expectedSystemBlue(_ traits: UITraitCollection?) -> RGBColor {
+        let color = traits.map { UIColor.systemBlue.resolvedColor(with: $0) } ?? UIColor.systemBlue
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        XCTAssertTrue(color.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+        return RGBColor(red: Double(red), green: Double(green), blue: Double(blue))
+    }
+
     func testSystemBlueSeedResolvesUIColorSystemBlue() {
-        let light = MediaArtworkScheme.systemBlueSeed(compatibleWith: UITraitCollection(userInterfaceStyle: .light))
-        XCTAssertEqual(light.rgb, 0x007AFF)
-        XCTAssertEqual(light, MediaArtworkScheme.fallbackSeed)
-        let dark = MediaArtworkScheme.systemBlueSeed(compatibleWith: UITraitCollection(userInterfaceStyle: .dark))
-        XCTAssertEqual(dark.rgb, 0x0A84FF)
-        XCTAssertNotEqual(MediaArtworkScheme.systemBlueSeed().rgb, 0x1B6EF3)
+        // Apple's exact systemBlue components vary by OS release and appearance, so compare with
+        // the live color rather than pinned hex values.
+        for traits in [nil, UITraitCollection(userInterfaceStyle: .light), UITraitCollection(userInterfaceStyle: .dark)] {
+            let seed = MediaArtworkScheme.systemBlueSeed(compatibleWith: traits)
+            let expected = expectedSystemBlue(traits)
+            XCTAssertEqual(seed.red, expected.red, accuracy: 1e-6)
+            XCTAssertEqual(seed.green, expected.green, accuracy: 1e-6)
+            XCTAssertEqual(seed.blue, expected.blue, accuracy: 1e-6)
+
+            // It is a system blue: dominant blue channel, low red, within Apple's historical range.
+            XCTAssertGreaterThan(seed.blue, 0.9)
+            XCTAssertLessThan(seed.red, 0.15)
+            XCTAssertGreaterThan(seed.green, 0.35)
+            XCTAssertLessThan(seed.green, 0.7)
+            XCTAssertNotEqual(seed.rgb, 0x1B6EF3)   // never Google Blue
+            XCTAssertNotEqual(seed.rgb, 0x6FD8E8)   // never the brand cyan
+        }
+        // The static Linux/default seed stays the documented iOS light approximation.
+        XCTAssertEqual(MediaArtworkScheme.fallbackSeed.rgb, 0x007AFF)
     }
 
     func testUnreadableUIImageFallsBackToSystemBlueNotMissingArtwork() {
