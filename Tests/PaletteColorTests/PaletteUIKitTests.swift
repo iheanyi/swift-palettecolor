@@ -95,6 +95,18 @@ final class PaletteUIKitTests: XCTestCase {
         XCTAssertEqual(scheme.vibrant.rgb, 0x2070D8)
     }
 
+    func testMediaArtworkSchemeFromOrientedUIImageMatchesCGImage() throws {
+        let cgImage = try makeCGImage()
+        let expected = try XCTUnwrap(MediaArtworkScheme(image: cgImage))
+        for orientation in [UIImage.Orientation.up, .down, .left, .rightMirrored] {
+            let image = UIImage(cgImage: cgImage, scale: 1, orientation: orientation)
+            let pixels = try XCTUnwrap(MediaArtworkScheme.pixels(from: image))
+            XCTAssertEqual(pixels.count, 2, "\(orientation.rawValue)")
+            // Orientation reorders pixels but not their colors, so the scheme is unchanged.
+            XCTAssertEqual(try XCTUnwrap(MediaArtworkScheme(image: image)), expected, "\(orientation.rawValue)")
+        }
+    }
+
     func testUIColorConversion() {
         let color = UIColor(RGBColor(rgb: 0x2070D8))
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0

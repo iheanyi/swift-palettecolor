@@ -22,8 +22,18 @@ extension Palette {
         let scale = sourceArea > resizeArea
             ? sqrt(Double(resizeArea) / Double(sourceArea))
             : 1
-        let width = max(1, Int(ceil(Double(sourceWidth) * scale)))
-        let height = max(1, Int(ceil(Double(sourceHeight) * scale)))
+        return CGImagePixels.render(
+            image,
+            width: max(1, Int(ceil(Double(sourceWidth) * scale))),
+            height: max(1, Int(ceil(Double(sourceHeight) * scale)))
+        )
+    }
+}
+
+enum CGImagePixels {
+    /// Draws `image` into a `width` × `height` sRGB bitmap with nearest-neighbour sampling and
+    /// returns opaque RGB888 pixels. Returns `nil` when a bitmap context cannot be created.
+    static func render(_ image: CGImage, width: Int, height: Int) -> [UInt32]? {
         var bytes = [UInt8](repeating: 0, count: width * height * 4)
         let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         // Core Graphics does not support a packed non-premultiplied RGBA context on every
@@ -59,7 +69,9 @@ extension Palette {
                 | unpremultiplied(bytes[index + 2])
         }
     }
+}
 
+extension Palette {
     /// Downscales `image` like the Android builder and generates a palette from it.
     /// Returns `nil` when pixels cannot be read from the image.
     ///
@@ -83,6 +95,26 @@ extension PaletteScheme {
     public init?(image: CGImage, maxColors: Int = Palette.defaultColorCount, configuration: Configuration = .default) {
         guard let pixels = Palette.pixels(from: image) else { return nil }
         self.init(pixels: pixels, maxColors: maxColors, configuration: configuration)
+    }
+}
+
+extension MediaArtworkScheme {
+    /// Converts a `CGImage` to opaque RGB888 pixels, downscaling like `WallpaperColors.fromBitmap`
+    /// (nearest neighbour to at most `maxArea` pixels, dimensions truncated, minimum 1). Images at
+    /// or under the limit are read at native size. Returns `nil` when the image is empty or a
+    /// bitmap context cannot be created.
+    public static func pixels(from image: CGImage, maxArea: Int = maxBitmapArea) -> [UInt32]? {
+        guard image.width > 0, image.height > 0 else { return nil }
+        let size = scaledSize(width: image.width, height: image.height, maxArea: maxArea)
+            ?? (image.width, image.height)
+        return CGImagePixels.render(image, width: size.width, height: size.height)
+    }
+
+    /// Downscales `image` like `WallpaperColors.fromBitmap`, quantizes it and builds the scheme.
+    /// Returns `nil` when pixels cannot be read from the image.
+    public init?(image: CGImage, maxArea: Int = maxBitmapArea) {
+        guard let pixels = Self.pixels(from: image, maxArea: maxArea) else { return nil }
+        self.init(pixels: pixels)
     }
 }
 

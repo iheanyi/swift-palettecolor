@@ -77,6 +77,22 @@ extension PaletteScheme {
     }
 }
 
+extension MediaArtworkScheme {
+    /// Converts an orientation-corrected rendering of `image` to RGB888 pixels, downscaled like
+    /// `WallpaperColors.fromBitmap`.
+    public static func pixels(from image: UIImage, maxArea: Int = maxBitmapArea) -> [UInt32]? {
+        guard let cgImage = image.paletteNormalizedCGImage() else { return nil }
+        return pixels(from: cgImage, maxArea: maxArea)
+    }
+
+    /// Builds the scheme from an orientation-corrected rendering of `image`. Returns `nil` when
+    /// the image has no drawable content or pixels cannot be read.
+    public init?(image: UIImage, maxArea: Int = maxBitmapArea) {
+        guard let cgImage = image.paletteNormalizedCGImage() else { return nil }
+        self.init(image: cgImage, maxArea: maxArea)
+    }
+}
+
 extension UIColor {
     public convenience init(_ color: RGBColor) {
         self.init(red: CGFloat(color.red), green: CGFloat(color.green), blue: CGFloat(color.blue), alpha: 1)
@@ -115,6 +131,14 @@ extension PaletteScheme {
     public init?(image: NSImage, maxColors: Int = Palette.defaultColorCount, configuration: Configuration = .default) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         self.init(image: cgImage, maxColors: maxColors, configuration: configuration)
+    }
+}
+
+extension MediaArtworkScheme {
+    /// Builds the scheme from the image's best `CGImage` representation.
+    public init?(image: NSImage, maxArea: Int = maxBitmapArea) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        self.init(image: cgImage, maxArea: maxArea)
     }
 }
 
