@@ -95,6 +95,64 @@ final class PaletteUIKitTests: XCTestCase {
         XCTAssertEqual(scheme.vibrant.rgb, 0x2070D8)
     }
 
+    func testMediaArtworkSchemeFromOrientedUIImageMatchesCGImage() throws {
+        let cgImage = try makeCGImage()
+        let expected = MediaArtworkScheme(image: cgImage)
+        for orientation in [UIImage.Orientation.up, .down, .left, .rightMirrored] {
+            let image = UIImage(cgImage: cgImage, scale: 1, orientation: orientation)
+            let pixels = try XCTUnwrap(MediaArtworkScheme.pixels(from: image))
+            XCTAssertEqual(pixels.count, 2, "\(orientation.rawValue)")
+            // Orientation reorders pixels but not their colors, so the same seed wins (the redraw
+            // may shift channels by a step or two, hence the tolerance rather than equality).
+            let scheme = MediaArtworkScheme(image: image)
+            XCTAssertEqual(scheme.seedHCT.hue, expected.seedHCT.hue, accuracy: 2, "\(orientation.rawValue)")
+            XCTAssertEqual(scheme.seedHCT.tone, expected.seedHCT.tone, accuracy: 2, "\(orientation.rawValue)")
+            XCTAssertEqual(HCT(scheme.accent).tone, 90, accuracy: 0.5, "\(orientation.rawValue)")
+        }
+    }
+
+    /// `UIColor.systemBlue` resolved the same way `MediaArtworkScheme.systemBlueSeed` does it.
+    private func expectedSystemBlue(_ traits: UITraitCollection?) -> RGBColor {
+        let color = traits.map { UIColor.systemBlue.resolvedColor(with: $0) } ?? UIColor.systemBlue
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        XCTAssertTrue(color.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+        return RGBColor(red: Double(red), green: Double(green), blue: Double(blue))
+    }
+
+    func testSystemBlueSeedResolvesUIColorSystemBlue() {
+        // Apple's exact systemBlue components vary by OS release and appearance, so compare with
+        // the live color rather than pinned hex values.
+        for traits in [nil, UITraitCollection(userInterfaceStyle: .light), UITraitCollection(userInterfaceStyle: .dark)] {
+            let seed = MediaArtworkScheme.systemBlueSeed(compatibleWith: traits)
+            let expected = expectedSystemBlue(traits)
+            XCTAssertEqual(seed.red, expected.red, accuracy: 1e-6)
+            XCTAssertEqual(seed.green, expected.green, accuracy: 1e-6)
+            XCTAssertEqual(seed.blue, expected.blue, accuracy: 1e-6)
+
+            // It is a system blue: dominant blue channel, low red, within Apple's historical range.
+            XCTAssertGreaterThan(seed.blue, 0.9)
+            XCTAssertLessThan(seed.red, 0.15)
+            XCTAssertGreaterThan(seed.green, 0.35)
+            XCTAssertLessThan(seed.green, 0.7)
+            XCTAssertNotEqual(seed.rgb, 0x1B6EF3)   // never Google Blue
+            XCTAssertNotEqual(seed.rgb, 0x6FD8E8)   // never the brand cyan
+        }
+        // The static Linux/default seed stays the documented iOS light approximation.
+        XCTAssertEqual(MediaArtworkScheme.fallbackSeed.rgb, 0x007AFF)
+    }
+
+    func testUnreadableUIImageFallsBackToSystemBlueNotMissingArtwork() {
+        // An empty UIImage has no CGImage and no drawable size, so pixels cannot be read.
+        let scheme = MediaArtworkScheme(image: UIImage())
+        XCTAssertEqual(scheme.seed, MediaArtworkScheme.systemBlueSeed())
+        XCTAssertNotEqual(scheme.seed.rgb, 0x1B6EF3)
+        XCTAssertNotEqual(scheme, .missingArtwork)
+
+        let pinned = MediaArtworkScheme(image: UIImage(), fallbackSeed: MediaArtworkScheme.fallbackSeed)
+        XCTAssertEqual(pinned, .unreadableArtwork)
+        XCTAssertEqual(pinned.seed.rgb, 0x007AFF)
+    }
+
     func testUIColorConversion() {
         let color = UIColor(RGBColor(rgb: 0x2070D8))
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0

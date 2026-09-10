@@ -41,6 +41,48 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 
 --------------------------------------------------------------------------------
+Material Color Utilities attribution
+--------------------------------------------------------------------------------
+
+Sources/PaletteColor/MaterialColorUtilities/ is vendored from the Swift port in
+material-foundation/material-color-utilities at commit
+5b3618b16fdc3825e21d5679bafd144662088ea1:
+https://github.com/material-foundation/material-color-utilities/tree/5b3618b16fdc3825e21d5679bafd144662088ea1/swift/Sources/MaterialColorUtilities
+
+Files: Cam16.swift, ColorUtils.swift, Hct.swift, HctSolver.swift,
+MathUtils.swift, PointProvider.swift, PointProviderLab.swift, Quantizer.swift,
+QuantizerCelebi.swift, QuantizerMap.swift, QuantizerWsmeans.swift,
+QuantizerWu.swift, Score.swift, TonalPalette.swift, ViewingConditions.swift.
+
+Local modifications:
+
+  - All declarations reduced from `public` to internal and `@inlinable`
+    removed, so the copy does not collide with the upstream module.
+  - QuantizerWsmeans.swift: the `debug` static var and debug logging were
+    removed (a mutable static is not concurrency-safe under Swift's strict
+    concurrency checking); `DistanceAndIndex.==` now compares equal distances
+    rather than unequal ones.
+  - QuantizerWu.swift: an unmutated `var` was changed to `let`.
+  - A provenance header was prepended to each file.
+
+Sources/PaletteColor/MediaArtworkScheme.swift follows the
+`CorePalettesContent` palette formulas from SchemeContent.swift in the same
+tree and the media-control role tones used by Android SystemUI.
+
+Copyright 2023 Google LLC.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+--------------------------------------------------------------------------------
 Origin
 --------------------------------------------------------------------------------
 
@@ -49,3 +91,8 @@ written for Camper (ios/iosApp/ArtworkPalette.swift in iheanyi/coda-android).
 The Camper-specific image loading, caching and SwiftUI view code was not
 carried over; only the palette math, contrast helpers and semantic role
 derivation are included here.
+
+MediaArtworkScheme is the Swift twin of the Kotlin MediaArtworkScheme in
+iheanyi/coda-android (the Android SystemUI / UMP media accent recipe) and
+implements the same portable algorithm so both apps derive identical roles
+from the same artwork pixels.

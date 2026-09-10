@@ -21,6 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
+      - name: Reject Swift file names that collide on case-insensitive filesystems
+        # Object files are named after the source basename, so HCT.swift and Hct.swift in
+        # one target overwrite each other on macOS/APFS and the linker drops symbols.
+        run: |
+          dups=$(find Sources Tests -name '*.swift' -exec basename {} \; | tr 'A-Z' 'a-z' | sort | uniq -d)
+          if [ -n "$dups" ]; then echo "Case-insensitive duplicate Swift file names: $dups"; exit 1; fi
       - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
       - run: swift test
 
