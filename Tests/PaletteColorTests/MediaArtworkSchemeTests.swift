@@ -77,6 +77,19 @@ final class MediaArtworkSchemeTests: XCTestCase {
         XCTAssertEqual(scheme.textSecondary, HCT(hue: hue, chroma: neutral + 4, tone: 80).color)
         XCTAssertEqual(scheme.textTertiary, HCT(hue: hue, chroma: neutral + 4, tone: 60).color)
         XCTAssertEqual(scheme.surface, HCT(hue: hue, chroma: max(chroma - 32, chroma / 2), tone: 20).color)
+        XCTAssertEqual(scheme.scrimSurface, HCT(hue: hue, chroma: max(chroma - 32, chroma / 2), tone: 30).color)
+        XCTAssertEqual(scheme.scrimAccent, HCT(hue: hue, chroma: chroma, tone: 30).color)
+        XCTAssertTrue(scheme.isChromatic)
+    }
+
+    func testIsChromaticUsesScoreCutoffChroma() {
+        XCTAssertTrue(MediaArtworkScheme(seed: RGBColor(rgb: 0x2070D8)).isChromatic)
+        XCTAssertFalse(MediaArtworkScheme(seed: .white).isChromatic)      // chroma 2.87
+        XCTAssertFalse(MediaArtworkScheme(seed: .black).isChromatic)
+        XCTAssertFalse(MediaArtworkScheme(seed: RGBColor(rgb: 0x808080)).isChromatic)
+        XCTAssertFalse(MediaArtworkScheme(seed: HCT(hue: 100, chroma: 4.5, tone: 50).color).isChromatic)
+        XCTAssertTrue(MediaArtworkScheme(seed: HCT(hue: 100, chroma: 6, tone: 50).color).isChromatic)
+        XCTAssertEqual(MediaArtworkScheme.chromaCutoff, 5)
     }
 
     func testToneOfRoleReproducesTheFixedRoles() {
@@ -88,6 +101,8 @@ final class MediaArtworkSchemeTests: XCTestCase {
         XCTAssertEqual(scheme.tone(80, of: .neutralVariant), scheme.textSecondary)
         XCTAssertEqual(scheme.tone(60, of: .neutralVariant), scheme.textTertiary)
         XCTAssertEqual(scheme.tone(20, of: .accentVariant), scheme.surface)
+        XCTAssertEqual(scheme.tone(30, of: .accentVariant), scheme.scrimSurface)
+        XCTAssertEqual(scheme.tone(30, of: .accent), scheme.scrimAccent)
         // Low-chroma seeds keep the accent-variant palette at half chroma rather than zero.
         let pale = MediaArtworkScheme(seed: HCT(hue: 200, chroma: 20, tone: 50).color)
         XCTAssertEqual(HCT(pale.tone(50, of: .accentVariant)).chroma, 10, accuracy: 1)
@@ -96,8 +111,9 @@ final class MediaArtworkSchemeTests: XCTestCase {
     func testRolesAreOrderedByToneAndReadable() {
         for seed: UInt32 in [0x2070D8, 0xD02020, 0xA8E63C, 0xFFFFFF, 0x000000, 0x808080] {
             let scheme = MediaArtworkScheme(seed: RGBColor(rgb: seed))
-            let tones = [scheme.textPrimary, scheme.accent, scheme.textSecondary, scheme.textTertiary, scheme.surface, scheme.onAccent]
+            let tones = [scheme.textPrimary, scheme.accent, scheme.textSecondary, scheme.textTertiary, scheme.scrimSurface, scheme.surface, scheme.onAccent]
                 .map { HCT($0).tone }
+            XCTAssertEqual(HCT(scheme.scrimAccent).tone, 30, accuracy: 0.5)
             XCTAssertEqual(tones, tones.sorted(by: >), "roles for \(String(seed, radix: 16))")
             XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: scheme.onAccent), 7, "\(String(seed, radix: 16))")
             XCTAssertGreaterThanOrEqual(scheme.textPrimary.contrast(with: scheme.surface), 7, "\(String(seed, radix: 16))")
@@ -122,6 +138,7 @@ final class MediaArtworkSchemeTests: XCTestCase {
             XCTAssertEqual(accent.tone, 90, accuracy: 0.5)
             XCTAssertNotEqual(scheme.accent.rgb, brandCyan)
             XCTAssertLessThan(scheme.accent.chroma, 0.02)
+            XCTAssertFalse(scheme.isChromatic)
         }
     }
 
@@ -150,13 +167,18 @@ final class MediaArtworkSchemeTests: XCTestCase {
 
     func testMissingArtworkIsMutedNeutral() {
         let scheme = MediaArtworkScheme.missingArtwork
+        // Same construction as Android's MissingArtwork: fromSeed(Hct(coolHue, smallChroma, 50)).
+        XCTAssertEqual(scheme, MediaArtworkScheme(seed: HCT(hue: 209, chroma: 4, tone: 50).color))
+        XCTAssertEqual(scheme.seedHCT.tone, 50, accuracy: 0.5)
+        XCTAssertFalse(scheme.isChromatic)
         XCTAssertNotEqual(scheme.accent.rgb, brandCyan)
         XCTAssertNotEqual(scheme.seed, MediaArtworkScheme.fallbackSeed)
         let accent = HCT(scheme.accent)
         XCTAssertEqual(accent.tone, 90, accuracy: 0.5)
-        XCTAssertLessThan(accent.chroma, 12)
+        XCTAssertLessThan(accent.chroma, 5)
+        XCTAssertLessThan(scheme.accent.chroma, 0.03)   // near-grey in sRGB too
         XCTAssertEqual(HCT(scheme.surface).tone, 20, accuracy: 0.5)
-        XCTAssertLessThan(HCT(scheme.surface).chroma, 6)
+        XCTAssertLessThan(HCT(scheme.surface).chroma, 5)
     }
 
     func testSchemeIsDeterministicAndHashable() {

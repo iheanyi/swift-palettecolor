@@ -50,7 +50,10 @@ scheme.textPrimary      // N1 tone 95
 scheme.textSecondary    // N2 tone 80
 scheme.textTertiary     // N2 tone 60
 scheme.surface          // A2 tone 20
+scheme.scrimSurface     // A2 tone 30
+scheme.scrimAccent      // A1 tone 30
 scheme.seed             // the scored seed color; scheme.seedHCT has its hue/chroma/tone
+scheme.isChromatic      // seed chroma ≥ 5 (Score.CUTOFF_CHROMA); false for mono artwork
 scheme.tone(70, of: .accent)  // any other tone of the A1/A2/N1/N2 palettes
 
 // Already have RGB888 pixels (custom decoder, Linux)? Pass the bitmap so the same downscale runs:
@@ -65,13 +68,13 @@ The algorithm is the portable SoT shared with Camper Android's `MediaArtworkSche
 2. **Quantize** with `QuantizerCelebi` (Wu + weighted-square-means in L\*a\*b\*), `maxColors = clamp(area / 16, 5, 128)`.
 3. **Seed** = `Score.score(colorToPopulation, desired: 4, fallback: 0xFF1B6EF3 /* GOOGLE_BLUE */, filter: false)[0]`. Filtering is off, so low-chroma seeds are **kept** (mono artwork gets the mono recipe); Google Blue is used only when the quantizer sees no pixels at all.
 4. **`SchemeContent` palettes** (dark, contrast 0): `A1 = TonalPalette(h, c)`, `A2 = TonalPalette(h, max(c − 32, 0.5c))`, `N1 = TonalPalette(h, c / 8)`, `N2 = TonalPalette(h, c / 8 + 4)`.
-5. **Roles**: `accent = A1.tone(90)`, `onAccent = N1.tone(10)`, `accentSecondary = A1.tone(80)`, `textPrimary = N1.tone(95)`, `textSecondary = N2.tone(80)`, `textTertiary = N2.tone(60)`, `surface = A2.tone(20)`.
+5. **Roles**: `accent = A1.tone(90)`, `onAccent = N1.tone(10)`, `accentSecondary = A1.tone(80)`, `textPrimary = N1.tone(95)`, `textSecondary = N2.tone(80)`, `textTertiary = N2.tone(60)`, `surface = A2.tone(20)`, `scrimSurface = A2.tone(30)`, `scrimAccent = A1.tone(30)`; `isChromatic = seedChroma >= 5`.
 
 Behaviour this locks in:
 
 - The byline uses `scheme.accent` for every cover, including monochrome ones, where it is a tone-90 grey — never a brand cyan.
 - There is no WCAG push and no chroma floor: tones come straight from HCT, so accents stay muted, UMP-style, and a black-and-white cover produces a grey scheme with the same formula.
-- `MediaArtworkScheme.missingArtwork` is a muted cool grey (seed HCT `260 / 8 / 40`) for players with no artwork. If your product has a launcher or brand-neutral seed, build it with `MediaArtworkScheme(seed:)` instead; do not fall back to a loud accent like `#6FD8E8` for these roles.
+- `MediaArtworkScheme.missingArtwork` mirrors Android's `MissingArtwork` construction — `fromSeed(Hct(brandHue, brandChroma / 8, 50))` — using a cool cyan-family hue at chroma 4 and tone 50 (seed HCT `209 / 4 / 50`, `isChromatic == false`), so the accent is a tone-90 muted grey. If your product has a launcher or brand-neutral seed, build it with `MediaArtworkScheme(seed:)` instead; do not fall back to a loud accent like `#6FD8E8` for these roles.
 
 #### `MediaArtworkScheme` vs `PaletteScheme`
 
@@ -192,7 +195,7 @@ accent.color / accent.uiColor / accent.nsColor / accent.cgColor
 
 | Type | Purpose |
 | --- | --- |
-| `MediaArtworkScheme` | SystemUI/UMP media accent scheme: `seed`, `seedHCT`, `accent`, `onAccent`, `accentSecondary`, `textPrimary`, `textSecondary`, `textTertiary`, `surface`, `tone(_:of:)`. `MediaArtworkScheme(seed:)`, `MediaArtworkScheme(pixels:)`, `MediaArtworkScheme(pixels:width:height:)`, `MediaArtworkScheme(image:)` (CGImage/UIImage/NSImage), `.missingArtwork`, `.fallbackSeed`, `.maxBitmapArea`, `seedColor(pixels:)`, `maxColors(forArea:)`, `downscaled(pixels:width:height:)`, `pixels(from:)` (CGImage/UIImage). |
+| `MediaArtworkScheme` | SystemUI/UMP media accent scheme: `seed`, `seedHCT`, `isChromatic`, `accent`, `onAccent`, `accentSecondary`, `textPrimary`, `textSecondary`, `textTertiary`, `surface`, `scrimSurface`, `scrimAccent`, `tone(_:of:)`. `MediaArtworkScheme(seed:)`, `MediaArtworkScheme(pixels:)`, `MediaArtworkScheme(pixels:width:height:)`, `MediaArtworkScheme(image:)` (CGImage/UIImage/NSImage), `.missingArtwork`, `.fallbackSeed`, `.chromaCutoff`, `.maxBitmapArea`, `seedColor(pixels:)`, `maxColors(forArea:)`, `downscaled(pixels:width:height:)`, `pixels(from:)` (CGImage/UIImage). |
 | `MediaArtworkScheme.PaletteRole` | `.accent` (A1), `.accentVariant` (A2), `.neutral` (N1), `.neutralVariant` (N2). |
 | `HCT` | Material HCT value type: `hue`, `chroma`, `tone`; `HCT(_ color:)` / `HCT(rgb:)` measure, `color` solves to sRGB. |
 | `Palette` | Result of extraction: `swatches`, `dominant`, `selected`, and `vibrant`/`darkVibrant`/`lightVibrant`/`muted`/`darkMuted`/`lightMuted`. `Palette.generate(pixels:maxColors:filter:retryLightnessOnly:)`, `Palette.generate(image:maxColors:filter:retryLightnessOnly:resizeArea:)` (CGImage/UIImage/NSImage), `Palette.pixels(from:resizeArea:)` (CGImage/UIImage). |

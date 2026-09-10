@@ -33,11 +33,16 @@ public struct MediaArtworkScheme: Hashable, Sendable {
     public static let maxBitmapArea = 112 * 112
     /// `GOOGLE_BLUE`, used only when the quantizer sees no pixels.
     public static let fallbackSeed = RGBColor(rgb: 0x1B6EF3)
+    /// Material `Score.CUTOFF_CHROMA`: seeds below this are treated as monochrome by ``isChromatic``.
+    public static let chromaCutoff: Double = 5
 
     /// The color the palettes are built from: the top `Score` result, or ``fallbackSeed``.
     public let seed: RGBColor
     /// The measured hue, chroma and tone of ``seed``.
     public let seedHCT: HCT
+    /// Whether the seed has at least ``chromaCutoff`` chroma. `false` for black-and-white or grey
+    /// artwork, whose roles are the mono recipe (tone-90 grey accent).
+    public var isChromatic: Bool { seedHCT.chroma >= Self.chromaCutoff }
 
     /// `A1` tone 90. Play button, byline, waveform and notification accent.
     public let accent: RGBColor
@@ -53,6 +58,10 @@ public struct MediaArtworkScheme: Hashable, Sendable {
     public let textTertiary: RGBColor
     /// `A2` tone 20.
     public let surface: RGBColor
+    /// `A2` tone 30. Scrim over artwork behind the surface.
+    public let scrimSurface: RGBColor
+    /// `A1` tone 30. Accent-tinted scrim.
+    public let scrimAccent: RGBColor
 
     /// Builds the `SchemeContent` dark palettes from `seed` and reads the media roles from them.
     public init(seed: RGBColor) {
@@ -73,6 +82,8 @@ public struct MediaArtworkScheme: Hashable, Sendable {
         textSecondary = Self.color(n2.tone(80))
         textTertiary = Self.color(n2.tone(60))
         surface = Self.color(a2.tone(20))
+        scrimSurface = Self.color(a2.tone(30))
+        scrimAccent = Self.color(a1.tone(30))
     }
 
     /// Quantizes already-downscaled opaque RGB888 pixels (`0xRRGGBB`, higher bits ignored), scores
@@ -88,9 +99,12 @@ public struct MediaArtworkScheme: Hashable, Sendable {
         self.init(pixels: Self.downscaled(pixels: pixels, width: width, height: height))
     }
 
-    /// A muted neutral for players with no artwork: a soft cool grey accent, never a brand color.
+    /// A muted neutral for players with no artwork, built the way Android's `MissingArtwork` is:
+    /// `fromSeed(Hct(brandHue, brandChroma / 8, 50))`. The package does not import brand
+    /// constants, so the seed is a cool (cyan-family) hue at chroma 4 — below ``chromaCutoff``,
+    /// so ``isChromatic`` is `false` — giving a tone-90 muted grey accent, never a vivid color.
     /// Seed your own launcher or brand-neutral color through ``init(seed:)`` to override it.
-    public static let missingArtwork = MediaArtworkScheme(seed: HCT(hue: 260, chroma: 8, tone: 40).color)
+    public static let missingArtwork = MediaArtworkScheme(seed: HCT(hue: 209, chroma: 4, tone: 50).color)
 
     /// Any tone of any of the four palettes, for states the fixed roles do not cover.
     public func tone(_ tone: Double, of role: PaletteRole) -> RGBColor {
