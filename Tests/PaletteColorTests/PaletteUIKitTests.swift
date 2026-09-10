@@ -111,12 +111,25 @@ final class PaletteUIKitTests: XCTestCase {
         }
     }
 
-    func testUnreadableUIImageFallsBackToGoogleBlueNotMissingArtwork() {
+    func testSystemBlueSeedResolvesUIColorSystemBlue() {
+        let light = MediaArtworkScheme.systemBlueSeed(compatibleWith: UITraitCollection(userInterfaceStyle: .light))
+        XCTAssertEqual(light.rgb, 0x007AFF)
+        XCTAssertEqual(light, MediaArtworkScheme.fallbackSeed)
+        let dark = MediaArtworkScheme.systemBlueSeed(compatibleWith: UITraitCollection(userInterfaceStyle: .dark))
+        XCTAssertEqual(dark.rgb, 0x0A84FF)
+        XCTAssertNotEqual(MediaArtworkScheme.systemBlueSeed().rgb, 0x1B6EF3)
+    }
+
+    func testUnreadableUIImageFallsBackToSystemBlueNotMissingArtwork() {
         // An empty UIImage has no CGImage and no drawable size, so pixels cannot be read.
         let scheme = MediaArtworkScheme(image: UIImage())
-        XCTAssertEqual(scheme, .unreadableArtwork)
-        XCTAssertEqual(scheme.seed.rgb, 0x1B6EF3)
+        XCTAssertEqual(scheme.seed, MediaArtworkScheme.systemBlueSeed())
+        XCTAssertNotEqual(scheme.seed.rgb, 0x1B6EF3)
         XCTAssertNotEqual(scheme, .missingArtwork)
+
+        let pinned = MediaArtworkScheme(image: UIImage(), fallbackSeed: MediaArtworkScheme.fallbackSeed)
+        XCTAssertEqual(pinned, .unreadableArtwork)
+        XCTAssertEqual(pinned.seed.rgb, 0x007AFF)
     }
 
     func testUIColorConversion() {

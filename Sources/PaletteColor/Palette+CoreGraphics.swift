@@ -111,15 +111,16 @@ extension MediaArtworkScheme {
     }
 
     /// Downscales `image` like `WallpaperColors.fromBitmap`, quantizes it and builds the scheme.
-    /// When pixels cannot be read from the image the result is ``unreadableArtwork``
-    /// (`fromSeed(FallbackSeedArgb)`, Google Blue), matching Android's `mediaArtworkScheme(bitmap)`;
-    /// use ``missingArtwork`` yourself when there is no artwork at all.
-    public init(image: CGImage, maxArea: Int = maxBitmapArea) {
+    /// When pixels cannot be read from the image (or it is empty) the scheme is seeded with
+    /// `fallbackSeed` — Apple systemBlue, the iOS counterpart of Android's
+    /// `mediaArtworkScheme(bitmap)` fallback; use ``missingArtwork`` yourself when there is no
+    /// artwork at all. The `UIImage`/`NSImage` overloads default `fallbackSeed` to the live system blue.
+    public init(image: CGImage, maxArea: Int = maxBitmapArea, fallbackSeed: RGBColor = fallbackSeed) {
         guard let pixels = Self.pixels(from: image, maxArea: maxArea) else {
-            self = .unreadableArtwork
+            self.init(seed: fallbackSeed)
             return
         }
-        self.init(pixels: pixels)
+        self.init(pixels: pixels, fallbackSeed: fallbackSeed)
     }
 }
 

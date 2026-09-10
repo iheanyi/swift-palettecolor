@@ -158,11 +158,25 @@ final class MediaArtworkSchemeTests: XCTestCase {
         XCTAssertEqual(HCT(scheme.accent).tone, 90, accuracy: 0.5)
     }
 
-    func testEmptyPixelsFallBackToGoogleBlue() {
+    func testFallbackSeedIsAppleSystemBlueNotGoogleBlue() {
+        XCTAssertEqual(MediaArtworkScheme.fallbackSeed.rgb, 0x007AFF)
+        XCTAssertNotEqual(MediaArtworkScheme.fallbackSeed.rgb, 0x1B6EF3)
+        XCTAssertNotEqual(MediaArtworkScheme.fallbackSeed.rgb, brandCyan)
+    }
+
+    func testEmptyPixelsFallBackToAppleSystemBlue() {
         let scheme = MediaArtworkScheme(pixels: [])
-        XCTAssertEqual(scheme.seed.rgb, 0x1B6EF3)
+        XCTAssertEqual(scheme.seed.rgb, 0x007AFF)
         XCTAssertEqual(scheme.seed, MediaArtworkScheme.fallbackSeed)
+        XCTAssertEqual(MediaArtworkScheme.seedColor(pixels: []).rgb, 0x007AFF)
         XCTAssertEqual(HCT(scheme.accent).tone, 90, accuracy: 0.5)
+
+        // Callers (for example the UIKit path with the live systemBlue) can pass their own fallback.
+        let dark = RGBColor(rgb: 0x0A84FF)
+        XCTAssertEqual(MediaArtworkScheme(pixels: [], fallbackSeed: dark).seed, dark)
+        XCTAssertEqual(MediaArtworkScheme(pixels: [], width: 0, height: 0, fallbackSeed: dark).seed, dark)
+        // The fallback never overrides real pixels.
+        XCTAssertEqual(MediaArtworkScheme(pixels: [lime], fallbackSeed: dark).seed.rgb, lime)
     }
 
     func testMissingArtworkSchemeIsTheBrandSeedsN1Tone90Gray() {
@@ -190,11 +204,12 @@ final class MediaArtworkSchemeTests: XCTestCase {
         XCTAssertLessThan(scheme.accent.chroma, 0.03)   // near-grey in sRGB too
     }
 
-    func testUnreadableArtworkIsTheGoogleBlueFallbackSeed() {
+    func testUnreadableArtworkIsSeededWithAppleSystemBlue() {
         let scheme = MediaArtworkScheme.unreadableArtwork
-        XCTAssertEqual(scheme.seed.rgb, 0x1B6EF3)
+        XCTAssertEqual(scheme.seed.rgb, 0x007AFF)
         XCTAssertEqual(scheme, MediaArtworkScheme(seed: MediaArtworkScheme.fallbackSeed))
         XCTAssertEqual(scheme, MediaArtworkScheme(pixels: []))
+        XCTAssertNotEqual(scheme, .missingArtwork)
     }
 
     func testSchemeIsDeterministicAndHashable() {

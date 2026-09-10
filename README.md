@@ -41,9 +41,10 @@ import PaletteColor
 
 // UIImage / NSImage / CGImage. UIImages are redrawn orientation-correct first, then the
 // bitmap is downscaled like WallpaperColors.fromBitmap (nearest neighbour to ≤ 112×112 pixels).
-// An image whose pixels cannot be read yields .unreadableArtwork (Google Blue seed), exactly
-// like Android's mediaArtworkScheme(bitmap). Use .missingArtwork only when there is no artwork.
-let scheme = artwork.map(MediaArtworkScheme.init(image:)) ?? .missingArtwork
+// An image whose pixels cannot be read is seeded with Apple systemBlue (live UIColor/NSColor
+// .systemBlue on Apple platforms, 0x007AFF otherwise), the iOS counterpart of Android's
+// mediaArtworkScheme(bitmap) fallback. Use .missingArtwork only when there is no artwork.
+let scheme = artwork.map { MediaArtworkScheme(image: $0) } ?? .missingArtwork
 
 scheme.accent           // Play button, byline, waveform, notification accent (A1 tone 90)
 scheme.onAccent         // content on the accent (N1 tone 10)
@@ -68,7 +69,7 @@ The algorithm is the portable SoT shared with Camper Android's `MediaArtworkSche
 
 1. **Downscale** like `WallpaperColors.fromBitmap`: if `w * h > 112 * 112`, nearest-neighbour scale to area `112 * 112` (dimensions truncated, minimum 1).
 2. **Quantize** with `QuantizerCelebi` (Wu + weighted-square-means in L\*a\*b\*), `maxColors = clamp(area / 16, 5, 128)`.
-3. **Seed** = `Score.score(colorToPopulation, desired: 4, fallback: 0xFF1B6EF3 /* GOOGLE_BLUE */, filter: false)[0]`. Filtering is off, so low-chroma seeds are **kept** (mono artwork gets the mono recipe); Google Blue is used only when the quantizer sees no pixels at all.
+3. **Seed** = `Score.score(colorToPopulation, desired: 4, fallback: fallbackSeed, filter: false)[0]`. Filtering is off, so low-chroma seeds are **kept** (mono artwork gets the mono recipe); the fallback is used only when the quantizer sees no pixels at all. **iOS divergence:** Android's fallback is Material `GOOGLE_BLUE` (`0xFF1B6EF3`); this package deliberately uses Apple `systemBlue` instead — `MediaArtworkScheme.fallbackSeed = 0x007AFF` (iOS light appearance) as the static default, and the live `UIColor.systemBlue` / `NSColor.systemBlue` (`systemBlueSeed()`) in the `UIImage`/`NSImage` initializers.
 4. **`SchemeContent` palettes** (dark, contrast 0): `A1 = TonalPalette(h, c)`, `A2 = TonalPalette(h, max(c − 32, 0.5c))`, `N1 = TonalPalette(h, c / 8)`, `N2 = TonalPalette(h, c / 8 + 4)`.
 5. **Roles**: `accent = A1.tone(90)`, `onAccent = N1.tone(10)`, `accentSecondary = A1.tone(80)`, `textPrimary = N1.tone(95)`, `textSecondary = N2.tone(80)`, `textTertiary = N2.tone(60)`, `surface = A2.tone(20)`, `scrimSurface = A2.tone(30)`, `scrimAccent = A1.tone(30)`; `isChromatic = seedChroma >= 5`.
 
@@ -77,7 +78,7 @@ Behaviour this locks in:
 - The byline uses `scheme.accent` for every cover, including monochrome ones, where it is a tone-90 grey — never a brand cyan.
 - There is no WCAG push and no chroma floor: tones come straight from HCT, so accents stay muted, UMP-style, and a black-and-white cover produces a grey scheme with the same formula.
 - `MediaArtworkScheme.missingArtwork` is built exactly like Android's `MissingArtwork`: `fromSeed(Hct.from(CamperPlaybackAccent.hue, CamperPlaybackAccent.chroma / 8, 50))`, with `camperPlaybackAccentRGB = 0x6FD8E8` used only for this derivation. The seed resolves to `#737879` (chroma ≈ 5.25, `isChromatic == true`) and the accent to `#DFE3E4` — the brand's N1 tone-90 grey, never the vivid `#6FD8E8`.
-- Unreadable artwork is not missing artwork. When an image's pixels cannot be decoded, `MediaArtworkScheme(image:)` returns `.unreadableArtwork` = `MediaArtworkScheme(seed: .fallbackSeed)` (Google Blue), the same as Android's `mediaArtworkScheme(bitmap)` and the same as an empty pixel buffer. Callers decide when to show `.missingArtwork`.
+- Unreadable artwork is not missing artwork. When an image's pixels cannot be decoded, `MediaArtworkScheme(image:)` seeds the scheme with Apple systemBlue (`fallbackSeed:` parameter; `.unreadableArtwork` is the static-seed form), mirroring how Android's `mediaArtworkScheme(bitmap)` falls back to a seed — but never `GOOGLE_BLUE`. An empty pixel buffer takes the same path. Callers decide when to show `.missingArtwork`.
 
 #### `MediaArtworkScheme` vs `PaletteScheme`
 
@@ -89,7 +90,7 @@ Behaviour this locks in:
 | Seed | `Score` (hue-proportion + chroma), filter off | light-vibrant → light-muted → vibrant → dominant |
 | Grey artwork | Grey scheme (accent = tone-90 grey) | `fallbackAccent` (cyan by default) |
 | Roles | Fixed HCT tones from `SchemeContent` palettes | Accent/text pushed to ≥ 4.5:1 against a wash gradient |
-| Fallback | `GOOGLE_BLUE` seed for empty or unreadable input (`.unreadableArtwork`); `.missingArtwork` is a separate, caller-chosen scheme | `nil` when the palette is empty |
+| Fallback | Apple `systemBlue` seed for empty or unreadable input (`.unreadableArtwork`; Android uses `GOOGLE_BLUE` here); `.missingArtwork` is a separate, caller-chosen scheme | `nil` when the palette is empty |
 
 Both pipelines share `RGBColor` and the platform image helpers, so you can run them side by side.
 
@@ -198,7 +199,7 @@ accent.color / accent.uiColor / accent.nsColor / accent.cgColor
 
 | Type | Purpose |
 | --- | --- |
-| `MediaArtworkScheme` | SystemUI/UMP media accent scheme: `seed`, `seedHCT`, `isChromatic`, `accent`, `onAccent`, `accentSecondary`, `textPrimary`, `textSecondary`, `textTertiary`, `surface`, `scrimSurface`, `scrimAccent`, `tone(_:of:)`. `MediaArtworkScheme(seed:)`, `MediaArtworkScheme(pixels:)`, `MediaArtworkScheme(pixels:width:height:)`, `MediaArtworkScheme(image:)` (CGImage/UIImage/NSImage; unreadable → `.unreadableArtwork`), `.missingArtwork`, `.unreadableArtwork`, `.fallbackSeed`, `.camperPlaybackAccentRGB`, `.chromaCutoff`, `.maxBitmapArea`, `seedColor(pixels:)`, `maxColors(forArea:)`, `downscaled(pixels:width:height:)`, `pixels(from:)` (CGImage/UIImage). |
+| `MediaArtworkScheme` | SystemUI/UMP media accent scheme: `seed`, `seedHCT`, `isChromatic`, `accent`, `onAccent`, `accentSecondary`, `textPrimary`, `textSecondary`, `textTertiary`, `surface`, `scrimSurface`, `scrimAccent`, `tone(_:of:)`. `MediaArtworkScheme(seed:)`, `MediaArtworkScheme(pixels:)`, `MediaArtworkScheme(pixels:width:height:)`, `MediaArtworkScheme(image:maxArea:fallbackSeed:)` (CGImage/UIImage/NSImage; unreadable → scheme from `fallbackSeed`), `.missingArtwork`, `.unreadableArtwork`, `.fallbackSeed` (Apple systemBlue `0x007AFF`), `systemBlueSeed()` (UIKit/AppKit, live system blue), `.camperPlaybackAccentRGB`, `.chromaCutoff`, `.maxBitmapArea`, `seedColor(pixels:)`, `maxColors(forArea:)`, `downscaled(pixels:width:height:)`, `pixels(from:)` (CGImage/UIImage). |
 | `MediaArtworkScheme.PaletteRole` | `.accent` (A1), `.accentVariant` (A2), `.neutral` (N1), `.neutralVariant` (N2). |
 | `HCT` | Material HCT value type: `hue`, `chroma`, `tone`; `HCT(_ color:)` / `HCT(rgb:)` measure, `color` solves to sRGB. |
 | `Palette` | Result of extraction: `swatches`, `dominant`, `selected`, and `vibrant`/`darkVibrant`/`lightVibrant`/`muted`/`darkMuted`/`lightMuted`. `Palette.generate(pixels:maxColors:filter:retryLightnessOnly:)`, `Palette.generate(image:maxColors:filter:retryLightnessOnly:resizeArea:)` (CGImage/UIImage/NSImage), `Palette.pixels(from:resizeArea:)` (CGImage/UIImage). |

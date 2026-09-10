@@ -85,14 +85,28 @@ extension MediaArtworkScheme {
         return pixels(from: cgImage, maxArea: maxArea)
     }
 
+    /// `UIColor.systemBlue` as sRGB, resolved for `traits` (or the current trait collection when
+    /// `nil`). Falls back to the static ``fallbackSeed`` if the color cannot be read.
+    public static func systemBlueSeed(compatibleWith traits: UITraitCollection? = nil) -> RGBColor {
+        #if os(watchOS)
+        let color = UIColor.systemBlue
+        #else
+        let color = traits.map { UIColor.systemBlue.resolvedColor(with: $0) } ?? UIColor.systemBlue
+        #endif
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return fallbackSeed }
+        return RGBColor(red: Double(red), green: Double(green), blue: Double(blue))
+    }
+
     /// Builds the scheme from an orientation-corrected rendering of `image`. Images with no
-    /// drawable content or unreadable pixels yield ``unreadableArtwork`` (Google Blue seed).
-    public init(image: UIImage, maxArea: Int = maxBitmapArea) {
+    /// drawable content or unreadable pixels are seeded with `fallbackSeed`, by default the live
+    /// `UIColor.systemBlue` (``systemBlueSeed(compatibleWith:)``).
+    public init(image: UIImage, maxArea: Int = maxBitmapArea, fallbackSeed: RGBColor = systemBlueSeed()) {
         guard let cgImage = image.paletteNormalizedCGImage() else {
-            self = .unreadableArtwork
+            self.init(seed: fallbackSeed)
             return
         }
-        self.init(image: cgImage, maxArea: maxArea)
+        self.init(image: cgImage, maxArea: maxArea, fallbackSeed: fallbackSeed)
     }
 }
 
@@ -138,14 +152,21 @@ extension PaletteScheme {
 }
 
 extension MediaArtworkScheme {
-    /// Builds the scheme from the image's best `CGImage` representation. Images without one
-    /// yield ``unreadableArtwork`` (Google Blue seed).
-    public init(image: NSImage, maxArea: Int = maxBitmapArea) {
+    /// `NSColor.systemBlue` converted to sRGB for the current appearance. Falls back to the static
+    /// ``fallbackSeed`` if the conversion fails.
+    public static func systemBlueSeed() -> RGBColor {
+        guard let color = NSColor.systemBlue.usingColorSpace(.sRGB) else { return fallbackSeed }
+        return RGBColor(red: Double(color.redComponent), green: Double(color.greenComponent), blue: Double(color.blueComponent))
+    }
+
+    /// Builds the scheme from the image's best `CGImage` representation. Images without one, or
+    /// with unreadable pixels, are seeded with `fallbackSeed`, by default the live `NSColor.systemBlue`.
+    public init(image: NSImage, maxArea: Int = maxBitmapArea, fallbackSeed: RGBColor = systemBlueSeed()) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            self = .unreadableArtwork
+            self.init(seed: fallbackSeed)
             return
         }
-        self.init(image: cgImage, maxArea: maxArea)
+        self.init(image: cgImage, maxArea: maxArea, fallbackSeed: fallbackSeed)
     }
 }
 

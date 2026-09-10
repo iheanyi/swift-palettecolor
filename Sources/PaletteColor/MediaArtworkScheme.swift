@@ -15,7 +15,11 @@ import Foundation
 ///
 /// Unlike ``PaletteScheme``, low-chroma seeds are kept (a black-and-white cover yields a tone-90
 /// grey accent, never a brand color), the roles come straight from HCT tonal palettes with no
-/// WCAG push, and the only fallback is Google Blue when there are no pixels at all.
+/// WCAG push, and the only fallback is Apple's system blue when there are no pixels at all.
+///
+/// The one intentional divergence from the Android twin: where Android seeds unreadable or
+/// empty input with Material's `GOOGLE_BLUE` (`0xFF1B6EF3`), this package uses Apple
+/// `systemBlue` (``fallbackSeed``, resolved from `UIColor`/`NSColor` at runtime where available).
 public struct MediaArtworkScheme: Hashable, Sendable {
     /// The `SchemeContent` tonal palette a role is read from.
     public enum PaletteRole: CaseIterable, Hashable, Sendable {
@@ -31,8 +35,12 @@ public struct MediaArtworkScheme: Hashable, Sendable {
 
     /// `WallpaperColors.MAX_BITMAP_SIZE`: bitmaps with more pixels are downscaled to this area first.
     public static let maxBitmapArea = 112 * 112
-    /// `GOOGLE_BLUE`, used only when the quantizer sees no pixels.
-    public static let fallbackSeed = RGBColor(rgb: 0x1B6EF3)
+    /// Apple `systemBlue` as it resolves in the iOS light appearance (`0x007AFF`). Used as the seed
+    /// only when the quantizer sees no pixels or an image cannot be read. This static value is the
+    /// platform-independent default; on UIKit/AppKit the image initializers resolve the live
+    /// `UIColor.systemBlue` / `NSColor.systemBlue` instead (see `systemBlueSeed()`).
+    /// Deliberately not Material's `GOOGLE_BLUE`.
+    public static let fallbackSeed = RGBColor(rgb: 0x007AFF)
     /// Material `Score.CUTOFF_CHROMA`: seeds below this are treated as monochrome by ``isChromatic``.
     public static let chromaCutoff: Double = 5
 
@@ -88,15 +96,16 @@ public struct MediaArtworkScheme: Hashable, Sendable {
 
     /// Quantizes already-downscaled opaque RGB888 pixels (`0xRRGGBB`, higher bits ignored), scores
     /// a seed and builds the scheme. Use ``init(pixels:width:height:)`` or an image initializer
-    /// when the source has not been reduced to ``maxBitmapArea`` yet.
-    public init(pixels: [UInt32]) {
-        self.init(seed: Self.seedColor(pixels: pixels))
+    /// when the source has not been reduced to ``maxBitmapArea`` yet. `fallbackSeed` is used only
+    /// when `pixels` is empty.
+    public init(pixels: [UInt32], fallbackSeed: RGBColor = fallbackSeed) {
+        self.init(seed: Self.seedColor(pixels: pixels, fallbackSeed: fallbackSeed))
     }
 
     /// Downscales a `width` × `height` RGB888 bitmap like `WallpaperColors.fromBitmap`, then
     /// quantizes and scores it. `pixels` is row-major and must hold `width * height` values.
-    public init(pixels: [UInt32], width: Int, height: Int) {
-        self.init(pixels: Self.downscaled(pixels: pixels, width: width, height: height))
+    public init(pixels: [UInt32], width: Int, height: Int, fallbackSeed: RGBColor = fallbackSeed) {
+        self.init(pixels: Self.downscaled(pixels: pixels, width: width, height: height), fallbackSeed: fallbackSeed)
     }
 
     /// Camper's playback accent (`CamperPlaybackAccent`, `0xFF6FD8E8` on Android). Used only to
@@ -109,13 +118,15 @@ public struct MediaArtworkScheme: Hashable, Sendable {
     /// accent to `0xDFE3E4`: the brand's N1 tone-90 grey, never the vivid brand cyan.
     ///
     /// This is distinct from an image that cannot be decoded, which maps to ``fallbackSeed``
-    /// (Google Blue) like Android's `mediaArtworkScheme(bitmap)`.
+    /// (Apple systemBlue) the way Android's `mediaArtworkScheme(bitmap)` maps to its fallback seed.
     public static let missingArtwork: MediaArtworkScheme = {
         let brand = HCT(rgb: camperPlaybackAccentRGB)
         return MediaArtworkScheme(seed: HCT(hue: brand.hue, chroma: brand.chroma / 8, tone: 50).color)
     }()
 
-    /// `fromSeed(FallbackSeedArgb)`: the scheme for artwork that could not be read.
+    /// The scheme for artwork that could not be read, seeded with the static ``fallbackSeed``
+    /// (Apple systemBlue, iOS light). The UIKit/AppKit image initializers build the equivalent from
+    /// the live system blue, so compare against ``seed`` rather than this value on those platforms.
     public static let unreadableArtwork = MediaArtworkScheme(seed: fallbackSeed)
 
     /// Any tone of any of the four palettes, for states the fixed roles do not cover.
@@ -136,9 +147,9 @@ public struct MediaArtworkScheme: Hashable, Sendable {
     // MARK: Seed selection
 
     /// `QuantizerCelebi` at ``maxColors(forArea:)`` followed by `Score.score(desired: 4,
-    /// fallback: GOOGLE_BLUE, filter: false)`. Grey seeds are kept; the fallback is used only when
-    /// `pixels` is empty.
-    public static func seedColor(pixels: [UInt32]) -> RGBColor {
+    /// fallback: fallbackSeed, filter: false)`. Grey seeds are kept; `fallbackSeed` (Apple
+    /// systemBlue by default) is used only when `pixels` is empty.
+    public static func seedColor(pixels: [UInt32], fallbackSeed: RGBColor = fallbackSeed) -> RGBColor {
         let argbPixels = pixels.map(argb(fromRGB:))
         let quantized = QuantizerCelebi().quantize(argbPixels, maxColors(forArea: pixels.count))
         let ranked = Score.score(
