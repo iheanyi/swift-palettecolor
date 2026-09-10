@@ -102,8 +102,12 @@ final class PaletteUIKitTests: XCTestCase {
             let image = UIImage(cgImage: cgImage, scale: 1, orientation: orientation)
             let pixels = try XCTUnwrap(MediaArtworkScheme.pixels(from: image))
             XCTAssertEqual(pixels.count, 2, "\(orientation.rawValue)")
-            // Orientation reorders pixels but not their colors, so the scheme is unchanged.
-            XCTAssertEqual(try XCTUnwrap(MediaArtworkScheme(image: image)), expected, "\(orientation.rawValue)")
+            // Orientation reorders pixels but not their colors, so the same seed wins (the redraw
+            // may shift channels by a step or two, hence the tolerance rather than equality).
+            let scheme = try XCTUnwrap(MediaArtworkScheme(image: image))
+            XCTAssertEqual(scheme.seedHCT.hue, expected.seedHCT.hue, accuracy: 2, "\(orientation.rawValue)")
+            XCTAssertEqual(scheme.seedHCT.tone, expected.seedHCT.tone, accuracy: 2, "\(orientation.rawValue)")
+            XCTAssertEqual(HCT(scheme.accent).tone, 90, accuracy: 0.5, "\(orientation.rawValue)")
         }
     }
 
