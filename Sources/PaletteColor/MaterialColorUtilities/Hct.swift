@@ -1,6 +1,8 @@
 // Vendored from material-foundation/material-color-utilities (swift/Sources/MaterialColorUtilities)
 // at commit 5b3618b16fdc3825e21d5679bafd144662088ea1. Local changes: access control reduced to
 // internal; see NOTICE for the full list. Do not edit without updating NOTICE.
+// The public value-type facade lives in ../HCTColor.swift; its file name differs by more than
+// case because object files collide on case-insensitive filesystems (macOS).
 //
 // Copyright 2023 Google LLC
 //
