@@ -151,9 +151,9 @@ public struct MediaArtworkScheme: Hashable, Sendable {
     /// systemBlue by default) is used only when `pixels` is empty.
     public static func seedColor(pixels: [UInt32], fallbackSeed: RGBColor = fallbackSeed) -> RGBColor {
         let argbPixels = pixels.map(argb(fromRGB:))
-        let quantized = QuantizerCelebi().quantize(argbPixels, maxColors(forArea: pixels.count))
+        let quantized = QuantizerCelebi.quantize(argbPixels, maxColors(forArea: pixels.count))
         let ranked = Score.score(
-            quantized.colorToCount,
+            quantized,
             desired: 4,
             fallbackColorARGB: argb(fromRGB: fallbackSeed.rgb),
             filter: false

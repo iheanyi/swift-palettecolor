@@ -44,26 +44,31 @@ specific language governing permissions and limitations under the License.
 Material Color Utilities attribution
 --------------------------------------------------------------------------------
 
-Sources/PaletteColor/MaterialColorUtilities/ is vendored from the Swift port in
+Sources/PaletteColor/MaterialColorUtilities/ comes from
 material-foundation/material-color-utilities at commit
-5b3618b16fdc3825e21d5679bafd144662088ea1:
-https://github.com/material-foundation/material-color-utilities/tree/5b3618b16fdc3825e21d5679bafd144662088ea1/swift/Sources/MaterialColorUtilities
+5b3618b16fdc3825e21d5679bafd144662088ea1.
 
-Files: Cam16.swift, ColorUtils.swift, Hct.swift, HctSolver.swift,
-MathUtils.swift, PointProvider.swift, PointProviderLab.swift, Quantizer.swift,
-QuantizerCelebi.swift, QuantizerMap.swift, QuantizerWsmeans.swift,
-QuantizerWu.swift, Score.swift, TonalPalette.swift, ViewingConditions.swift.
+Vendored from the Swift port
+(https://github.com/material-foundation/material-color-utilities/tree/5b3618b16fdc3825e21d5679bafd144662088ea1/swift/Sources/MaterialColorUtilities):
+Cam16.swift, ColorUtils.swift, Hct.swift, HctSolver.swift, MathUtils.swift,
+TonalPalette.swift, ViewingConditions.swift. Local modifications: all
+declarations reduced from `public` to internal and `@inlinable` removed, so the
+copy does not collide with the upstream module, and a provenance header
+prepended to each file.
 
-Local modifications:
-
-  - All declarations reduced from `public` to internal and `@inlinable`
-    removed, so the copy does not collide with the upstream module.
-  - QuantizerWsmeans.swift: the `debug` static var and debug logging were
-    removed (a mutable static is not concurrency-safe under Swift's strict
-    concurrency checking); `DistanceAndIndex.==` now compares equal distances
-    rather than unequal ones.
-  - QuantizerWu.swift: an unmutated `var` was changed to `let`.
-  - A provenance header was prepended to each file.
+Ported from the Java implementation
+(https://github.com/material-foundation/material-color-utilities/tree/5b3618b16fdc3825e21d5679bafd144662088ea1/java),
+the copy Android vendors: Quantizer.swift (QuantizerResult.java, plus
+`JavaRandom`, a bit-exact `java.util.Random`), QuantizerMap.swift,
+QuantizerWu.swift, QuantizerWsmeans.swift, QuantizerCelebi.swift, Score.swift.
+The Swift port of these files follows the Dart implementation, which differs
+from Java (iteration count, minimum movement, random centroid seeding, cluster
+order, integer division), and its centroid seeding could loop forever. The
+Swift here reproduces the Java semantics exactly: Java `int` arithmetic with
+wrapping `Int32` operations, `LinkedHashMap` ordering, stable sorting by
+`Double.compare`, and `java.util.Random(0x42688)`. Loops over pixels and
+clusters use flat buffers for speed; PointProvider.swift and
+PointProviderLab.swift were removed (the L*a*b* distance is inlined).
 
 Sources/PaletteColor/MediaArtworkScheme.swift follows the
 `CorePalettesContent` palette formulas from SchemeContent.swift in the same

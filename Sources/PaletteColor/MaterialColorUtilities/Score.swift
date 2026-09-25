@@ -1,8 +1,10 @@
-// Vendored from material-foundation/material-color-utilities (swift/Sources/MaterialColorUtilities)
-// at commit 5b3618b16fdc3825e21d5679bafd144662088ea1. Local changes: access control reduced to
-// internal; see NOTICE for the full list. Do not edit without updating NOTICE.
+// Ported from material-foundation/material-color-utilities' Java implementation
+// (java/score/Score.java) at commit 5b3618b16fdc3825e21d5679bafd144662088ea1, the copy Android
+// vendors: colors are read in the quantizer's order and ranked with a stable sort, as Java's
+// `LinkedHashMap` and `Collections.sort` do, so ties break the same way on both platforms. See
+// NOTICE.
 //
-// Copyright 2023 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,8 +48,8 @@ enum Score {
   /// rank the colors based on suitability for being used for a UI theme.
   ///
   /// - Parameters:
-  ///   `colorsToPopulation`: is a map with keys of colors and values of often
-  ///     the color appears, usually from a source image.
+  ///   `quantized`: colors and how often each appears, usually from a source image, in the
+  ///     quantizer's order.
   ///   `desired`: Max count of colors to be returned in the list.
   ///   `fallbackColorARGB`: Color to be returned if no other options available.
   ///   `filter`: Whether to filter out undesireable combinations.
@@ -60,7 +62,7 @@ enum Score {
   ///   default number of colors returned is 4, simply because thats the # of
   ///   colors display in Android 12's wallpaper picker.
   static func score(
-    _ colorsToPopulation: [Int: Int], desired: Int = 4, fallbackColorARGB: Int = 0xff42_85F4,
+    _ quantized: QuantizerResult, desired: Int = 4, fallbackColorARGB: Int = 0xff42_85F4,
     filter: Bool = true
   )
     -> [Int]
@@ -70,8 +72,7 @@ enum Score {
     var colorsHCT: [Hct] = []
     var huePopulation = [Int](repeating: 0, count: 360)
     var populationSum: Double = 0.0
-    for argb in colorsToPopulation.keys {
-      let population = colorsToPopulation[argb]!
+    for (argb, population) in zip(quantized.colors, quantized.populations) {
       let hct = Hct.fromInt(argb)
       colorsHCT.append(hct)
       let hue = Int(floor(hct.hue))
@@ -105,10 +106,12 @@ enum Score {
       let score = proportionScore + chromaScore
       scoredHCTs.append(ScoredHCT(hct: hct, score: score))
     }
-    // Sorted so that colors with higher scores come first.
-    scoredHCTs.sort {
-      $0.score > $1.score
-    }
+    // Sorted so that colors with higher scores come first. Java's `Collections.sort` is stable
+    // and orders by `Double.compare`, so equal scores keep the quantizer's order.
+    scoredHCTs = scoredHCTs.enumerated().sorted { lhs, rhs in
+      let order = javaCompare(lhs.element.score, rhs.element.score)
+      return order != 0 ? order > 0 : lhs.offset < rhs.offset
+    }.map(\.element)
 
     // Iterates through potential hue differences in degrees in order to select
     // the colors with the largest distribution of hues possible. Starting at
@@ -139,5 +142,14 @@ enum Score {
       colors.append(chosenHCT.toInt())
     }
     return colors
+  }
+
+  /// `Double.compare`: numeric order, with `-0.0` below `0.0` and NaN above everything.
+  private static func javaCompare(_ a: Double, _ b: Double) -> Int {
+    if a < b { return -1 }
+    if a > b { return 1 }
+    let aBits = Int64(bitPattern: a.isNaN ? Double.nan.bitPattern : a.bitPattern)
+    let bBits = Int64(bitPattern: b.isNaN ? Double.nan.bitPattern : b.bitPattern)
+    return aBits == bBits ? 0 : (aBits < bBits ? -1 : 1)
   }
 }
