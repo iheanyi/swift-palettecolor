@@ -156,7 +156,9 @@ extension MediaArtworkScheme {
     /// ``fallbackSeed`` if the conversion fails.
     public static func systemBlueSeed() -> RGBColor {
         guard let color = NSColor.systemBlue.usingColorSpace(.sRGB) else { return fallbackSeed }
-        return RGBColor(red: Double(color.redComponent), green: Double(color.greenComponent), blue: Double(color.blueComponent))
+        return RGBColor(
+            red: Double(color.redComponent), green: Double(color.greenComponent), blue: Double(color.blueComponent)
+        )
     }
 
     /// Builds the scheme from the image's best `CGImage` representation. Images without one, or

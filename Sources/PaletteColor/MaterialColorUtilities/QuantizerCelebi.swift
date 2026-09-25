@@ -1,8 +1,8 @@
-// Vendored from material-foundation/material-color-utilities (swift/Sources/MaterialColorUtilities)
-// at commit 5b3618b16fdc3825e21d5679bafd144662088ea1. Local changes: access control reduced to
-// internal; see NOTICE for the full list. Do not edit without updating NOTICE.
+// Ported from material-foundation/material-color-utilities' Java implementation
+// (java/quantize/QuantizerCelebi.java) at commit 5b3618b16fdc3825e21d5679bafd144662088ea1, the
+// copy Android vendors, rather than from the Swift port, which drifted from it. See NOTICE.
 //
-// Copyright 2023 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,24 +16,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import Foundation
-
-class QuantizerCelebi: Quantizer {
-  init() {}
-  func quantize(
-    _ pixels: [Int], _ maxColors: Int, returnInputPixelToClusterPixel: Bool = false
-  )
-    -> QuantizerResult
-  {
-    let wu = QuantizerWu()
-    let wuResult = wu.quantize(pixels, maxColors)
-    let wsmeansResult = QuantizerWsmeans.quantize(
-      pixels,
-      maxColors,
-      startingClusters: Array(wuResult.colorToCount.keys).sorted(by: { $0 > $1 }),
-      pointProvider: PointProviderLab(),
-      returnInputPixelToClusterPixel: returnInputPixelToClusterPixel
-    )
-    return wsmeansResult
+/// Wu's boxes as the starting clusters of Wsmeans, as Android's `QuantizerCelebi` does. The pixel
+/// histogram is built once and shared (Java builds the same first-seen map in both passes).
+enum QuantizerCelebi {
+  static func quantize(_ pixels: [Int], _ maxColors: Int) -> QuantizerResult {
+    let histogram = QuantizerMap.quantize(pixels)
+    let wuClusters = QuantizerWu.quantize(histogram, maxColors)
+    return QuantizerWsmeans.quantize(histogram, startingClusters: wuClusters, maxColors: maxColors)
   }
 }

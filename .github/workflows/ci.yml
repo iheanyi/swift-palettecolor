@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        swift: ["5.10", "6.1"]
+        swift: ["6.1", "6.2"]
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
@@ -38,6 +38,8 @@ jobs:
       - run: swift --version
       - run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
       - run: swift test
+      - name: SwiftLint
+        run: swift package plugin --allow-writing-to-package-directory swiftlint --strict
       - name: Test on iOS Simulator (UIKit paths)
         run: |
           set -euo pipefail

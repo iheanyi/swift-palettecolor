@@ -1,135 +1,136 @@
 // PaletteColor
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
+import Foundation
+import Testing
 import PaletteColor
 
-final class RGBColorTests: XCTestCase {
-    func testLuminanceAndContrastMatchWCAG() {
-        XCTAssertEqual(RGBColor.white.luminance, 1, accuracy: 1e-9)
-        XCTAssertEqual(RGBColor.black.luminance, 0, accuracy: 1e-9)
-        XCTAssertEqual(RGBColor.white.contrast(with: .black), 21, accuracy: 1e-9)
-        XCTAssertEqual(RGBColor.black.contrast(with: .white), 21, accuracy: 1e-9)
-        XCTAssertEqual(RGBColor.white.contrast(with: .white), 1, accuracy: 1e-9)
+struct RGBColorTests {
+    @Test func luminanceAndContrastMatchWCAG() {
+        #expect(abs(RGBColor.white.luminance - 1) <= 1e-9)
+        #expect(abs(RGBColor.black.luminance - 0) <= 1e-9)
+        #expect(abs(RGBColor.white.contrast(with: .black) - 21) <= 1e-9)
+        #expect(abs(RGBColor.black.contrast(with: .white) - 21) <= 1e-9)
+        #expect(abs(RGBColor.white.contrast(with: .white) - 1) <= 1e-9)
 
         // #767676 on white is the canonical ~4.54:1 WCAG AA boundary grey.
         let grey = RGBColor(rgb: 0x767676)
-        XCTAssertEqual(grey.contrast(with: .white), 4.54, accuracy: 0.01)
+        #expect(abs(grey.contrast(with: .white) - 4.54) <= 0.01)
     }
 
-    func testPackedRGBRoundTrips() {
+    @Test func packedRGBRoundTrips() {
         let color = RGBColor(rgb: 0x2070D8)
-        XCTAssertEqual(color.red, Double(0x20) / 255)
-        XCTAssertEqual(color.green, Double(0x70) / 255)
-        XCTAssertEqual(color.blue, Double(0xD8) / 255)
-        XCTAssertEqual(color.rgb, 0x2070D8)
-        XCTAssertEqual(RGBColor(red8: 17, green8: 16, blue8: 25).rgb, 0x111019)
-        XCTAssertEqual(RGBColor(rgb: 0xFF2070D8).rgb, 0x2070D8)
+        #expect(color.red == (Double(0x20) / 255))
+        #expect(color.green == (Double(0x70) / 255))
+        #expect(color.blue == (Double(0xD8) / 255))
+        #expect(color.rgb == 0x2070D8)
+        #expect(RGBColor(red8: 17, green8: 16, blue8: 25).rgb == 0x111019)
+        #expect(RGBColor(rgb: 0xFF2070D8).rgb == 0x2070D8)
     }
 
-    func testMixedInterpolatesAndClampsFraction() {
+    @Test func mixedInterpolatesAndClampsFraction() {
         let mid = RGBColor.black.mixed(with: .white, fraction: 0.5)
-        XCTAssertEqual(mid, RGBColor(red: 0.5, green: 0.5, blue: 0.5))
-        XCTAssertEqual(RGBColor.black.mixed(with: .white, fraction: 2), .white)
-        XCTAssertEqual(RGBColor.black.mixed(with: .white, fraction: -1), .black)
+        #expect(mid == RGBColor(red: 0.5, green: 0.5, blue: 0.5))
+        #expect(RGBColor.black.mixed(with: .white, fraction: 2) == .white)
+        #expect(RGBColor.black.mixed(with: .white, fraction: -1) == .black)
     }
 
-    func testChromaIsZeroForGreys() {
-        XCTAssertEqual(RGBColor(red: 0.3, green: 0.3, blue: 0.3).chroma, 0)
-        XCTAssertEqual(RGBColor(red: 1, green: 0, blue: 0).chroma, 1)
+    @Test func chromaIsZeroForGreys() {
+        #expect(RGBColor(red: 0.3, green: 0.3, blue: 0.3).chroma == 0)
+        #expect(RGBColor(red: 1, green: 0, blue: 0).chroma == 1)
     }
 
-    func testReadableReturnsSelfWhenAlreadyLighterAndContrasting() {
+    @Test func readableReturnsSelfWhenAlreadyLighterAndContrasting() {
         let dark = RGBColor(rgb: 0x111019)
         let accent = RGBColor(rgb: 0x6FD8E8)
-        XCTAssertGreaterThanOrEqual(accent.contrast(with: dark), 4.5)
-        XCTAssertEqual(accent.readable(on: [dark]), accent)
+        #expect(accent.contrast(with: dark) >= 4.5)
+        #expect(accent.readable(on: [dark]) == accent)
     }
 
-    func testReadableLiftsTowardWhiteUntilMinimumContrastIsMet() {
+    @Test func readableLiftsTowardWhiteUntilMinimumContrastIsMet() {
         let dark = RGBColor(rgb: 0x111019)
         let deepBlue = RGBColor(red: 0.05, green: 0.08, blue: 0.7)
-        XCTAssertLessThan(deepBlue.contrast(with: dark), 4.5)
+        #expect(deepBlue.contrast(with: dark) < 4.5)
 
         let lifted = deepBlue.readable(on: [dark])
-        XCTAssertGreaterThanOrEqual(lifted.contrast(with: dark), 4.5)
-        XCTAssertGreaterThan(lifted.luminance, deepBlue.luminance)
+        #expect(lifted.contrast(with: dark) >= 4.5)
+        #expect(lifted.luminance > deepBlue.luminance)
         // The lift keeps the hue direction: blue remains the strongest channel.
-        XCTAssertGreaterThan(lifted.blue, lifted.red)
-        XCTAssertGreaterThan(lifted.blue, lifted.green)
+        #expect(lifted.blue > lifted.red)
+        #expect(lifted.blue > lifted.green)
 
         let stricter = deepBlue.readable(on: [dark], minimum: 7)
-        XCTAssertGreaterThanOrEqual(stricter.contrast(with: dark), 7)
-        XCTAssertGreaterThan(stricter.luminance, lifted.luminance)
+        #expect(stricter.contrast(with: dark) >= 7)
+        #expect(stricter.luminance > lifted.luminance)
     }
 
-    func testReadableDarkensTowardBlackOnLightSurfaces() {
+    @Test func readableDarkensTowardBlackOnLightSurfaces() {
         let light = RGBColor.white
         let yellow = RGBColor(rgb: 0xFFEE55)
-        XCTAssertLessThan(yellow.contrast(with: light), 4.5)
+        #expect(yellow.contrast(with: light) < 4.5)
 
         let darkened = yellow.readable(on: [light])
-        XCTAssertGreaterThanOrEqual(darkened.contrast(with: light), 4.5)
-        XCTAssertLessThan(darkened.luminance, yellow.luminance)
+        #expect(darkened.contrast(with: light) >= 4.5)
+        #expect(darkened.luminance < yellow.luminance)
         // Pulled toward black, not white: every channel shrinks and hue direction is kept.
-        XCTAssertLessThan(darkened.red, yellow.red)
-        XCTAssertLessThan(darkened.blue, yellow.blue)
-        XCTAssertGreaterThan(darkened.red, darkened.blue)
+        #expect(darkened.red < yellow.red)
+        #expect(darkened.blue < yellow.blue)
+        #expect(darkened.red > darkened.blue)
 
         let stricter = yellow.readable(on: [light], minimum: 7)
-        XCTAssertGreaterThanOrEqual(stricter.contrast(with: light), 7)
-        XCTAssertLessThan(stricter.luminance, darkened.luminance)
+        #expect(stricter.contrast(with: light) >= 7)
+        #expect(stricter.luminance < darkened.luminance)
     }
 
-    func testReadableOnLightSurfaceLeavesAlreadyReadableDarkColorAlone() {
+    @Test func readableOnLightSurfaceLeavesAlreadyReadableDarkColorAlone() {
         let navy = RGBColor(rgb: 0x1A237E)
-        XCTAssertGreaterThanOrEqual(navy.contrast(with: .white), 4.5)
-        XCTAssertEqual(navy.readable(on: [.white]), navy)
+        #expect(navy.contrast(with: .white) >= 4.5)
+        #expect(navy.readable(on: [.white]) == navy)
     }
 
-    func testReadableSatisfiesMixedLightBackgrounds() {
+    @Test func readableSatisfiesMixedLightBackgrounds() {
         let backgrounds = [RGBColor.white, RGBColor(rgb: 0xEEEEF4), RGBColor(rgb: 0xDDDDE6)]
         let lifted = RGBColor(rgb: 0x6FD8E8).readable(on: backgrounds)
         for background in backgrounds {
-            XCTAssertGreaterThanOrEqual(lifted.contrast(with: background), 4.5)
+            #expect(lifted.contrast(with: background) >= 4.5)
         }
-        XCTAssertLessThan(lifted.luminance, RGBColor(rgb: 0x6FD8E8).luminance)
+        #expect(lifted.luminance < RGBColor(rgb: 0x6FD8E8).luminance)
     }
 
-    func testReadableFallsBackToBestNeutralWhenNoDirectionCanSatisfy() {
+    @Test func readableFallsBackToBestNeutralWhenNoDirectionCanSatisfy() {
         // Neither black (2.0:1 on 0x404040) nor white (3.9:1 on 0x808080) reaches 4.5:1 against
         // both greys, so the neutral with the better worst case is returned.
         let midGrey = RGBColor(rgb: 0x808080)
         let impossible = [midGrey, RGBColor(rgb: 0x404040)]
-        XCTAssertEqual(midGrey.readable(on: impossible), .white)
+        #expect(midGrey.readable(on: impossible) == .white)
 
         // When one direction can satisfy every background it is searched, not the endpoint.
         let solvable = [midGrey, RGBColor(rgb: 0xC0C0C0)]
         let result = midGrey.readable(on: solvable)
-        XCTAssertNotEqual(result, .black)
-        XCTAssertLessThan(result.luminance, midGrey.luminance)
+        #expect(result != .black)
+        #expect(result.luminance < midGrey.luminance)
         for background in solvable {
-            XCTAssertGreaterThanOrEqual(result.contrast(with: background), 4.5)
+            #expect(result.contrast(with: background) >= 4.5)
         }
     }
 
-    func testReadableWithNoBackgroundsReturnsSelf() {
+    @Test func readableWithNoBackgroundsReturnsSelf() {
         let color = RGBColor(rgb: 0x2070D8)
-        XCTAssertEqual(color.readable(on: []), color)
+        #expect(color.readable(on: []) == color)
     }
 
-    func testReadableSatisfiesEveryBackground() {
+    @Test func readableSatisfiesEveryBackground() {
         let backgrounds = [RGBColor(rgb: 0x111019), RGBColor(rgb: 0x303040), RGBColor(rgb: 0x404050)]
         let lifted = RGBColor(red: 0.6, green: 0.1, blue: 0.1).readable(on: backgrounds)
         for background in backgrounds {
-            XCTAssertGreaterThanOrEqual(lifted.contrast(with: background), 4.5)
+            #expect(lifted.contrast(with: background) >= 4.5)
         }
     }
 
-    func testOnColorPicksHigherContrastNeutral() {
-        XCTAssertEqual(RGBColor.white.onColor, .black)
-        XCTAssertEqual(RGBColor.black.onColor, .white)
-        XCTAssertEqual(RGBColor(rgb: 0x6FD8E8).onColor, .black)
-        XCTAssertEqual(RGBColor(rgb: 0x2070D8).onColor, .white)
+    @Test func onColorPicksHigherContrastNeutral() {
+        #expect(RGBColor.white.onColor == .black)
+        #expect(RGBColor.black.onColor == .white)
+        #expect(RGBColor(rgb: 0x6FD8E8).onColor == .black)
+        #expect(RGBColor(rgb: 0x2070D8).onColor == .white)
     }
 }

@@ -93,7 +93,9 @@ public struct PaletteScheme: Hashable, Sendable {
     /// Generates a palette from `pixels` with the standard filter, retrying with
     /// ``Palette/Filter/lightnessOnly`` when the standard filter rejects every color, and builds a
     /// scheme from the result. Returns `nil` when neither pass yields a swatch.
-    public init?(pixels: [UInt32], maxColors: Int = Palette.defaultColorCount, configuration: Configuration = .default) {
+    public init?(
+        pixels: [UInt32], maxColors: Int = Palette.defaultColorCount, configuration: Configuration = .default
+    ) {
         let palette = Palette.generate(pixels: pixels, maxColors: maxColors, retryLightnessOnly: true)
         self.init(palette: palette, configuration: configuration)
     }

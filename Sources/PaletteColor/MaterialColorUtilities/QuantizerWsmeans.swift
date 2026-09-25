@@ -1,4 +1,12 @@
-// Copyright 2023 Google LLC
+// Ported from material-foundation/material-color-utilities' Java implementation
+// (java/quantize/QuantizerWsmeans.java) at commit 5b3618b16fdc3825e21d5679bafd144662088ea1, the
+// copy Android vendors, rather than from the Swift port, which drifted from it: the Swift port
+// picked extra random centroids with a generator that reaches only half of any range, so
+// `while indices.contains(index)` never ended for artwork whose Wu pass returned fewer than
+// `min(maxColors, distinct colors)` clusters. Java clamps the cluster count to the starting
+// clusters and never seeds extra ones. See NOTICE.
+//
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,243 +20,206 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import Foundation
+/// Weighted square means (M. Emre Celebi, "Improving the Performance of K-Means for Color
+/// Quantization", 2011), K-means over deduplicated pixels in L*a*b* with a triangle-inequality
+/// skip. Every loop is bounded: at most `maxIterations` passes over the points and clusters.
+enum QuantizerWsmeans {
+  private static let maxIterations = 10
+  private static let minMovementDistance = 3.0
 
-class DistanceAndIndex: Comparable {
-  func compareTo(_ other: DistanceAndIndex) -> Int {
-    if distance < other.distance {
-      return -1
-    } else if distance > other.distance {
-      return 1
-    } else {
-      return 0
-    }
-  }
-
-  static func < (lhs: DistanceAndIndex, rhs: DistanceAndIndex) -> Bool {
-    return lhs.distance < rhs.distance
-  }
-
-  static func == (lhs: DistanceAndIndex, rhs: DistanceAndIndex) -> Bool {
-    return lhs.distance == rhs.distance
-  }
-
-  var distance: Double
-  var index: Int
-
-  init(_ distance: Double, _ index: Int) {
-    self.distance = distance
-    self.index = index
-  }
-}
-
-class QuantizerWsmeans {
+  /// - Parameters:
+  ///   - histogram: the image's distinct pixels in first-seen order (`QuantizerMap`), the order
+  ///     Java's `LinkedHashMap` gives them.
+  ///   - startingClusters: Wu's colors, in Wu's order.
   static func quantize(
-    _ inputPixels: [Int],
-    _ maxColors: Int,
-    startingClusters: [Int] = [],
-    pointProvider: PointProvider = PointProviderLab(),
-    maxIterations: Int = 5,
-    returnInputPixelToClusterPixel: Bool = false
+    _ histogram: QuantizerResult, startingClusters: [Int], maxColors: Int
   ) -> QuantizerResult {
-    var pixelToCount: [Int: Int] = [:]
-    var points: [[Double]] = []
-    var pixels: [Int] = []
-    var pointCount = 0
-    for inputPixel in inputPixels {
-      var pixelCount = pixelToCount[inputPixel]
-      if pixelCount == nil {
-        pixelCount = 1
-        pixelToCount[inputPixel] = pixelCount
-      } else {
-        pixelCount = pixelCount! + 1
-        pixelToCount[inputPixel] = pixelCount
-      }
-      if pixelCount == 1 {
-        pointCount = pointCount + 1
-        points.append(pointProvider.fromInt(inputPixel))
-        pixels.append(inputPixel)
-      }
+    let pointCount = histogram.colors.count
+    var clusterCount = min(maxColors, pointCount)
+    if !startingClusters.isEmpty {
+      clusterCount = min(clusterCount, startingClusters.count)
     }
+    guard clusterCount > 0 else { return QuantizerResult() }
+    let k = clusterCount
 
-    var counts = [Int](repeating: 0, count: pointCount)
+    var points = [Double](repeating: 0, count: pointCount * 3)
     for i in 0..<pointCount {
-      let pixel = pixels[i]
-      let count = pixelToCount[pixel]
-      counts[i] = count!
+      let lab = ColorUtils.labFromArgb(histogram.colors[i])
+      points[i * 3] = lab[0]
+      points[i * 3 + 1] = lab[1]
+      points[i * 3 + 2] = lab[2]
+    }
+    let counts = histogram.populations
+
+    var clusters = [Double](repeating: 0, count: k * 3)
+    let seeded = min(startingClusters.count, k)
+    for i in 0..<seeded {
+      let lab = ColorUtils.labFromArgb(startingClusters[i])
+      clusters[i * 3] = lab[0]
+      clusters[i * 3 + 1] = lab[1]
+      clusters[i * 3 + 2] = lab[2]
+    }
+    // Java leaves these clusters null (and would throw); only a caller without Wu reaches them.
+    for i in seeded..<k {
+      clusters[i * 3] = points[i * 3]
+      clusters[i * 3 + 1] = points[i * 3 + 1]
+      clusters[i * 3 + 2] = points[i * 3 + 2]
     }
 
-    let clusterCount = min(maxColors, pointCount)
+    var random = JavaRandom(seed: 0x42688)
+    var clusterIndices = [Int](repeating: 0, count: pointCount)
+    for i in 0..<pointCount {
+      clusterIndices[i] = Int(random.nextInt(Int32(k)))
+    }
 
-    var clusters = startingClusters.map { pointProvider.fromInt($0) }
-    let additionalClustersNeeded = clusterCount - clusters.count
-    if additionalClustersNeeded > 0 {
-      var seedGenerator = RandomNumberWithSeed(0x42688)
-      var indices: [Int] = []
-      for _ in 0..<additionalClustersNeeded {
-        // Use existing points rather than generating random centroids.
-        //
-        // KMeans is extremely sensitive to initial clusters. This quantizer
-        // is meant to be used with a Wu quantizer that provides initial
-        // centroids, but Wu is very slow on unscaled images and when extracting
-        // more than 256 colors.
-        //
-        // Here, we can safely assume that more than 256 colors were requested
-        // for extraction. Generating random centroids tends to lead to many
-        // "empty" centroids, as the random centroids are nowhere near any pixels
-        // in the image, and the centroids from Wu are very refined and close
-        // to pixels in the image.
-        //
-        // Rather than generate random centroids, we'll pick centroids that
-        // are actual pixels in the image, and avoid duplicating centroids.
-        var index = Int.random(in: 0..<points.count, using: &seedGenerator)
-        while indices.contains(index) {
-          index = Int.random(in: 0..<points.count, using: &seedGenerator)
+    // Java's `distanceToIndexMatrix`, reduced to what it observably does. Each row holds the
+    // distances from one cluster, sorted ascending in place every pass. Java writes each pair into
+    // row slots by position and then sorts, so a slot's value survives from the previous pass when
+    // nothing overwrites it (the diagonal starts at Java's `-1`). The assignment step compares
+    // `row[previous][j]` (a sorted distance) with `clusters[j]` (an unsorted cluster), an upstream
+    // quirk kept for parity. Java's parallel `indexMatrix` is never read, so it is not kept.
+    var rows = [Double](repeating: -1, count: k * k)
+    var pixelCountSums = [Int](repeating: 0, count: k)
+    var sumA = [Double](repeating: 0, count: k)
+    var sumB = [Double](repeating: 0, count: k)
+    var sumC = [Double](repeating: 0, count: k)
+
+    // The passes below use `while` counters over raw pointers: a Debug build compiles this package
+    // without optimization, where `for i in 0..<n` goes through the generic `IndexingIterator` on
+    // every step and made one cover take seconds.
+    var iteration = 0
+    while iteration < maxIterations {
+      defer { iteration += 1 }
+      clusters.withUnsafeBufferPointer { c in
+        rows.withUnsafeMutableBufferPointer { r in
+          var i = 0
+          while i < k {
+            var j = i + 1
+            while j < k {
+              let distance = labDistance(c, i, c, j)
+              r[j * k + i] = distance
+              r[i * k + j] = distance
+              j += 1
+            }
+            var row = UnsafeMutableBufferPointer(rebasing: r[(i * k)..<((i + 1) * k)])
+            row.sort()
+            i += 1
+          }
         }
-        indices.append(index)
       }
 
-      for index in indices {
-        clusters.append(points[index])
-      }
-    }
-    var clusterIndices = fillArray(pointCount) { index in
-      index % clusterCount
-    }
-    var indexMatrix = [[Int]](
-      repeating: [Int](repeating: 0, count: clusterCount), count: clusterCount)
-    var distanceToIndexMatrix: [[DistanceAndIndex]] = fillArray(clusterCount) { _ in
-      fillArray(clusterCount) { index in
-        DistanceAndIndex(0, index)
-      }
-    }
-    var pixelCountSums = [Int](repeating: 0, count: clusterCount)
-    for iteration in 0..<maxIterations {
       var pointsMoved = 0
-      for i in 0..<clusterCount {
-        for j in (i + 1)..<clusterCount {
-          let distance = pointProvider.distance(clusters[i], clusters[j])
-          distanceToIndexMatrix[j][i].distance = distance
-          distanceToIndexMatrix[j][i].index = i
-          distanceToIndexMatrix[i][j].distance = distance
-          distanceToIndexMatrix[i][j].index = j
-        }
-        distanceToIndexMatrix[i].sort()
-        for j in 0..<clusterCount {
-          indexMatrix[i][j] = distanceToIndexMatrix[i][j].index
+      points.withUnsafeBufferPointer { pointBuffer in
+        clusters.withUnsafeBufferPointer { clusterBuffer in
+          rows.withUnsafeBufferPointer { rowBuffer in
+            clusterIndices.withUnsafeMutableBufferPointer { assignedBuffer in
+              guard let p = pointBuffer.baseAddress, let c = clusterBuffer.baseAddress,
+                    let r = rowBuffer.baseAddress, let assigned = assignedBuffer.baseAddress else { return }
+              var i = 0
+              while i < pointCount {
+                let pL = p[i * 3], pA = p[i * 3 + 1], pB = p[i * 3 + 2]
+                let previousClusterIndex = assigned[i]
+                let previous = previousClusterIndex * 3
+                let previousL = pL - c[previous], previousA = pA - c[previous + 1], previousB = pB - c[previous + 2]
+                let previousDistance = previousL * previousL + previousA * previousA + previousB * previousB
+                let limit = 4 * previousDistance
+                let row = previousClusterIndex * k
+                var minimumDistance = previousDistance
+                var newClusterIndex = -1
+                var j = 0
+                while j < k {
+                  if r[row + j] < limit {
+                    let cluster = j * 3
+                    let dL = pL - c[cluster], dA = pA - c[cluster + 1], dB = pB - c[cluster + 2]
+                    let distance = dL * dL + dA * dA + dB * dB
+                    if distance < minimumDistance {
+                      minimumDistance = distance
+                      newClusterIndex = j
+                    }
+                  }
+                  j += 1
+                }
+                if newClusterIndex != -1 {
+                  let distanceChange = abs(minimumDistance.squareRoot() - previousDistance.squareRoot())
+                  if distanceChange > minMovementDistance {
+                    pointsMoved += 1
+                    assigned[i] = newClusterIndex
+                  }
+                }
+                i += 1
+              }
+            }
+          }
         }
       }
 
-      for i in 0..<pointCount {
-        let point = points[i]
-        let previousClusterIndex = clusterIndices[i]
-        let previousCluster = clusters[previousClusterIndex]
-        let previousDistance = pointProvider.distance(point, previousCluster)
-        var minimumDistance = previousDistance
-        var newClusterIndex = -1
-        for j in 0..<clusterCount {
-          if distanceToIndexMatrix[previousClusterIndex][j].distance >= 4 * previousDistance {
-            continue
-          }
-          let distance = pointProvider.distance(point, clusters[j])
-          if distance < minimumDistance {
-            minimumDistance = distance
-            newClusterIndex = j
-          }
-        }
-        if newClusterIndex != -1 {
-          pointsMoved = pointsMoved + 1
-          clusterIndices[i] = newClusterIndex
-        }
-      }
-
-      if pointsMoved == 0 && iteration > 0 {
+      if pointsMoved == 0 && iteration != 0 {
         break
       }
 
-      var componentASums = [Double](repeating: 0, count: clusterCount)
-      var componentBSums = [Double](repeating: 0, count: clusterCount)
-      var componentCSums = [Double](repeating: 0, count: clusterCount)
-
-      for i in 0..<clusterCount {
+      var i = 0
+      while i < k {
         pixelCountSums[i] = 0
+        sumA[i] = 0
+        sumB[i] = 0
+        sumC[i] = 0
+        i += 1
       }
-
-      for i in 0..<pointCount {
+      i = 0
+      while i < pointCount {
         let clusterIndex = clusterIndices[i]
-        let point = points[i]
         let count = counts[i]
-        pixelCountSums[clusterIndex] = pixelCountSums[clusterIndex] + count
-        componentASums[clusterIndex] = componentASums[clusterIndex] + (point[0] * Double(count))
-        componentBSums[clusterIndex] = componentBSums[clusterIndex] + (point[1] * Double(count))
-        componentCSums[clusterIndex] = componentCSums[clusterIndex] + (point[2] * Double(count))
+        let weight = Double(count)
+        pixelCountSums[clusterIndex] += count
+        let a: Double = points[i * 3] * weight
+        let b: Double = points[i * 3 + 1] * weight
+        let c: Double = points[i * 3 + 2] * weight
+        sumA[clusterIndex] += a
+        sumB[clusterIndex] += b
+        sumC[clusterIndex] += c
+        i += 1
       }
-
-      for i in 0..<clusterCount {
+      i = 0
+      while i < k {
         let count = pixelCountSums[i]
         if count == 0 {
-          clusters[i] = [0, 0, 0]
-          continue
+          clusters[i * 3] = 0
+          clusters[i * 3 + 1] = 0
+          clusters[i * 3 + 2] = 0
+        } else {
+          clusters[i * 3] = sumA[i] / Double(count)
+          clusters[i * 3 + 1] = sumB[i] / Double(count)
+          clusters[i * 3 + 2] = sumC[i] / Double(count)
         }
-        let a = componentASums[i] / Double(count)
-        let b = componentBSums[i] / Double(count)
-        let c = componentCSums[i] / Double(count)
-        clusters[i] = [a, b, c]
+        i += 1
       }
     }
 
-    var clusterArgbs: [Int] = []
-    var clusterPopulations: [Int] = []
-    for i in 0..<clusterCount {
+    var result = QuantizerResult()
+    var seen = Set<Int>()
+    for i in 0..<k {
       let count = pixelCountSums[i]
       if count == 0 {
         continue
       }
-
-      let possibleNewCluster = pointProvider.toInt(clusters[i])
-      if clusterArgbs.contains(possibleNewCluster) {
+      let argb = ColorUtils.argbFromLab(clusters[i * 3], clusters[i * 3 + 1], clusters[i * 3 + 2])
+      if !seen.insert(argb).inserted {
         continue
       }
-
-      clusterArgbs.append(possibleNewCluster)
-      clusterPopulations.append(count)
+      result.colors.append(argb)
+      result.populations.append(count)
     }
-
-    var inputPixelToClusterPixel: [Int: Int] = [:]
-    if returnInputPixelToClusterPixel {
-      for i in 0..<pixels.count {
-        let inputPixel = pixels[i]
-        let clusterIndex = clusterIndices[i]
-        let cluster = clusters[clusterIndex]
-        let clusterPixel = pointProvider.toInt(cluster)
-        inputPixelToClusterPixel[inputPixel] = clusterPixel
-      }
-    }
-
-    var colorToCount: [Int: Int] = [:]
-    for i in 0..<clusterArgbs.count {
-      let key = clusterArgbs[i]
-      let value = clusterPopulations[i]
-      colorToCount[key] = value
-    }
-    return QuantizerResult(colorToCount, inputPixelToClusterPixel: inputPixelToClusterPixel)
-  }
-}
-
-private func fillArray<T>(_ count: Int, _ callback: (_ index: Int) -> T) -> [T] {
-  var results: [T] = []
-  for index in 0..<count {
-    results.append(callback(index))
-  }
-  return results
-}
-
-private class RandomNumberWithSeed: RandomNumberGenerator {
-  init(_ seed: Int) {
-    srand48(seed)
+    return result
   }
 
-  func next() -> UInt64 {
-    return UInt64(drand48() * Double(Int.max))
+  /// `PointProviderLab.distance`: squared Euclidean distance, summed L, a, b in that order.
+  @inline(__always)
+  private static func labDistance(
+    _ one: UnsafeBufferPointer<Double>, _ i: Int, _ two: UnsafeBufferPointer<Double>, _ j: Int
+  ) -> Double {
+    let dL = one[i * 3] - two[j * 3]
+    let dA = one[i * 3 + 1] - two[j * 3 + 1]
+    let dB = one[i * 3 + 2] - two[j * 3 + 2]
+    return dL * dL + dA * dA + dB * dB
   }
 }

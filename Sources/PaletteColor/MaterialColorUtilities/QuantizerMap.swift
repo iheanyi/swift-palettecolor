@@ -1,8 +1,8 @@
-// Vendored from material-foundation/material-color-utilities (swift/Sources/MaterialColorUtilities)
-// at commit 5b3618b16fdc3825e21d5679bafd144662088ea1. Local changes: access control reduced to
-// internal; see NOTICE for the full list. Do not edit without updating NOTICE.
+// Ported from material-foundation/material-color-utilities' Java implementation
+// (java/quantize/QuantizerMap.java) at commit 5b3618b16fdc3825e21d5679bafd144662088ea1, the
+// copy Android vendors, rather than from the Swift port, which drifted from it. See NOTICE.
 //
-// Copyright 2023 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,20 +16,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-class QuantizerMap: Quantizer {
-  func quantize(
-    _ pixels: [Int], _ maxColors: Int, returnInputPixelToClusterPixel: Bool = false
-  )
-    -> QuantizerResult
-  {
-    var countByColor: [Int: Int] = [:]
+/// Distinct pixels in first-seen order with their counts (Java's `LinkedHashMap`). Every pixel
+/// counts, whatever its alpha, as in Java.
+enum QuantizerMap {
+  static func quantize(_ pixels: [Int]) -> QuantizerResult {
+    var slots: [Int: Int] = [:]
+    slots.reserveCapacity(min(pixels.count, 1 << 14))
+    var result = QuantizerResult()
     for pixel in pixels {
-      let alpha = ColorUtils.alphaFromArgb(pixel)
-      if alpha < 255 {
-        continue
+      if let slot = slots[pixel] {
+        result.populations[slot] += 1
+      } else {
+        slots[pixel] = result.colors.count
+        result.colors.append(pixel)
+        result.populations.append(1)
       }
-      countByColor[pixel] = (countByColor[pixel] ?? 0) + 1
     }
-    return QuantizerResult(countByColor)
+    return result
   }
 }
