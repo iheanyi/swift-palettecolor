@@ -23,11 +23,6 @@ import Foundation
 private struct ScoredHCT {
   let hct: Hct
   let score: Double
-
-  init(hct: Hct, score: Double) {
-    self.hct = hct
-    self.score = score
-  }
 }
 
 /// Given a large set of colors, remove colors that are unsuitable for a UI

@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 // SPDX-License-Identifier: Apache-2.0
 
 import PackageDescription
@@ -14,6 +14,11 @@ let package = Package(
     ],
     products: [
         .library(name: "PaletteColor", targets: ["PaletteColor"]),
+    ],
+    dependencies: [
+        // Development only: `swift package plugin swiftlint`. No target depends on it, so SwiftPM's
+        // target-based resolution never fetches it for packages that depend on PaletteColor.
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.65.1"),
     ],
     targets: [
         .target(

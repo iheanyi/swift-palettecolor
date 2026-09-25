@@ -1,13 +1,14 @@
 // PaletteColor
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
+import Foundation
+import Testing
 import PaletteColor
 
-final class PaletteSchemeTests: XCTestCase {
+struct PaletteSchemeTests {
     private let configuration = PaletteScheme.Configuration.default
 
-    func testAccentsRemainReadableAcrossEveryWashStop() {
+    @Test func accentsRemainReadableAcrossEveryWashStop() {
         for scheme in [
             PaletteScheme(seed: RGBColor(red: 1, green: 0.95, blue: 0.05)),
             PaletteScheme(seed: RGBColor(red: 0.05, green: 0.08, blue: 0.7)),
@@ -16,19 +17,19 @@ final class PaletteSchemeTests: XCTestCase {
             PaletteScheme(seed: .black),
         ] {
             for stop in scheme.washStops {
-                XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: stop), 4.5)
+                #expect(scheme.accent.contrast(with: stop) >= 4.5)
             }
-            XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: scheme.onAccent), 4.5)
+            #expect(scheme.accent.contrast(with: scheme.onAccent) >= 4.5)
         }
     }
 
-    func testTextRolesMatchNeutralsAndRemainReadableAcrossWash() {
+    @Test func textRolesMatchNeutralsAndRemainReadableAcrossWash() {
         let darkWash = PaletteScheme(
             seed: RGBColor(red: 0.25, green: 0.18, blue: 0.30),
             darkMuted: RGBColor(red: 0.08, green: 0.06, blue: 0.10)
         )
-        XCTAssertEqual(darkWash.primaryText, configuration.onSurface)
-        XCTAssertEqual(darkWash.secondaryText, configuration.onSurfaceVariant)
+        #expect(darkWash.primaryText == configuration.onSurface)
+        #expect(darkWash.secondaryText == configuration.onSurfaceVariant)
 
         for scheme in [
             darkWash,
@@ -39,30 +40,30 @@ final class PaletteSchemeTests: XCTestCase {
             ),
         ] {
             for stop in scheme.washStops {
-                XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5)
-                XCTAssertGreaterThanOrEqual(scheme.secondaryText.contrast(with: stop), 4.5)
+                #expect(scheme.primaryText.contrast(with: stop) >= 4.5)
+                #expect(scheme.secondaryText.contrast(with: stop) >= 4.5)
             }
         }
     }
 
-    func testMonochromeUsesFallbackAccentAndContainersStayDark() {
+    @Test func monochromeUsesFallbackAccentAndContainersStayDark() {
         let monochrome = PaletteScheme(seed: RGBColor(red: 0.8, green: 0.8, blue: 0.8))
-        XCTAssertEqual(monochrome.accent, configuration.fallbackAccent)
-        XCTAssertLessThan(monochrome.secondaryContainer.luminance, monochrome.primaryContainer.luminance)
-        XCTAssertLessThan(monochrome.primaryContainer.luminance, 0.06)
+        #expect(monochrome.accent == configuration.fallbackAccent)
+        #expect(monochrome.secondaryContainer.luminance < monochrome.primaryContainer.luminance)
+        #expect(monochrome.primaryContainer.luminance < 0.06)
     }
 
-    func testWashStopsEndOnSurfaceAndFallBackToTintedSeedWithoutDarkMuted() {
+    @Test func washStopsEndOnSurfaceAndFallBackToTintedSeedWithoutDarkMuted() {
         let scheme = PaletteScheme(seed: RGBColor(rgb: 0x2070D8))
-        XCTAssertEqual(scheme.washStops.count, 3)
-        XCTAssertEqual(scheme.washStops.last, configuration.surface)
-        XCTAssertEqual(scheme.darkMuted, scheme.seed.mixed(with: configuration.surface, fraction: 0.65))
-        XCTAssertEqual(scheme.vibrant, scheme.seed)
-        XCTAssertNil(scheme.lightMuted)
-        XCTAssertNil(scheme.lightVibrant)
+        #expect(scheme.washStops.count == 3)
+        #expect(scheme.washStops.last == configuration.surface)
+        #expect(scheme.darkMuted == scheme.seed.mixed(with: configuration.surface, fraction: 0.65))
+        #expect(scheme.vibrant == scheme.seed)
+        #expect(scheme.lightMuted == nil)
+        #expect(scheme.lightVibrant == nil)
     }
 
-    func testSchemeFromPaletteChoosesLightestColorfulSeedAndCarriesRoleSwatches() throws {
+    @Test func schemeFromPaletteChoosesLightestColorfulSeedAndCarriesRoleSwatches() throws {
         let pixels: [UInt32] = [
             0x2070D8, 0x2070D8, 0x2070D8,
             0xD020C0, 0xD020C0,
@@ -71,54 +72,54 @@ final class PaletteSchemeTests: XCTestCase {
             0x101010,
         ]
         let palette = Palette.generate(pixels: pixels)
-        let scheme = try XCTUnwrap(PaletteScheme(palette: palette))
+        let scheme = try #require(PaletteScheme(palette: palette))
 
         // No lightVibrant in this fixture, so lightMuted (0xA0A0A0) becomes the seed.
-        XCTAssertEqual(scheme.seed.rgb, 0xA0A0A0)
-        XCTAssertEqual(scheme.lightMuted?.rgb, 0xA0A0A0)
-        XCTAssertEqual(scheme.vibrant.rgb, 0x2070D8)
-        XCTAssertEqual(scheme.darkMuted.rgb, 0x101010)
-        XCTAssertNil(scheme.lightVibrant)
+        #expect(scheme.seed.rgb == 0xA0A0A0)
+        #expect(scheme.lightMuted?.rgb == 0xA0A0A0)
+        #expect(scheme.vibrant.rgb == 0x2070D8)
+        #expect(scheme.darkMuted.rgb == 0x101010)
+        #expect(scheme.lightVibrant == nil)
         // The grey lightMuted control seed has no chroma, so the accent falls back.
-        XCTAssertEqual(scheme.accent, configuration.fallbackAccent)
+        #expect(scheme.accent == configuration.fallbackAccent)
     }
 
-    func testSchemeFromPaletteFallsBackToDominantWhenNoRoleMatches() throws {
+    @Test func schemeFromPaletteFallsBackToDominantWhenNoRoleMatches() throws {
         // A single dark-vibrant color matches no light/normal target, so seed == dominant.
         let pixels = Array(repeating: UInt32(0x100060), count: 8)
         let palette = Palette.generate(pixels: pixels)
-        XCTAssertNil(palette.lightVibrant)
-        XCTAssertNil(palette.lightMuted)
-        XCTAssertNil(palette.vibrant)
-        let scheme = try XCTUnwrap(PaletteScheme(palette: palette))
-        XCTAssertEqual(scheme.seed, palette.dominant?.color)
+        #expect(palette.lightVibrant == nil)
+        #expect(palette.lightMuted == nil)
+        #expect(palette.vibrant == nil)
+        let scheme = try #require(PaletteScheme(palette: palette))
+        #expect(scheme.seed == palette.dominant?.color)
     }
 
-    func testSchemeFromPixelsRetriesWithLightnessOnlyFilter() throws {
+    @Test func schemeFromPixelsRetriesWithLightnessOnlyFilter() throws {
         let nearRed = Array(repeating: UInt32(0xD06040), count: 12)
-        XCTAssertNil(PaletteScheme(palette: Palette.generate(pixels: nearRed)))
-        let scheme = try XCTUnwrap(PaletteScheme(pixels: nearRed))
-        XCTAssertEqual(scheme.seed.rgb, 0xD06040)
+        #expect(PaletteScheme(palette: Palette.generate(pixels: nearRed)) == nil)
+        let scheme = try #require(PaletteScheme(pixels: nearRed))
+        #expect(scheme.seed.rgb == 0xD06040)
         for stop in scheme.washStops {
-            XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: stop), 4.5)
+            #expect(scheme.accent.contrast(with: stop) >= 4.5)
         }
     }
 
-    func testSchemeIsNilForEmptyPalette() {
-        XCTAssertNil(PaletteScheme(palette: .empty))
-        XCTAssertNil(PaletteScheme(pixels: Array(repeating: UInt32(0xFFFFFF), count: 4)))
+    @Test func schemeIsNilForEmptyPalette() {
+        #expect(PaletteScheme(palette: .empty) == nil)
+        #expect(PaletteScheme(pixels: Array(repeating: UInt32(0xFFFFFF), count: 4)) == nil)
     }
 
-    func testNeutralSchemeIsReadable() {
+    @Test func neutralSchemeIsReadable() {
         let neutral = PaletteScheme.neutral
-        XCTAssertEqual(neutral.seed, RGBColor(red: 0.25, green: 0.25, blue: 0.25))
-        XCTAssertEqual(neutral.accent, configuration.fallbackAccent)
+        #expect(neutral.seed == RGBColor(red: 0.25, green: 0.25, blue: 0.25))
+        #expect(neutral.accent == configuration.fallbackAccent)
         for stop in neutral.washStops {
-            XCTAssertGreaterThanOrEqual(neutral.primaryText.contrast(with: stop), 4.5)
+            #expect(neutral.primaryText.contrast(with: stop) >= 4.5)
         }
     }
 
-    func testLightConfigurationKeepsAccentAndTextReadable() {
+    @Test func lightConfigurationKeepsAccentAndTextReadable() {
         let light = PaletteScheme.Configuration(
             surface: .white,
             fallbackAccent: RGBColor(rgb: 0x0077AA),
@@ -133,21 +134,21 @@ final class PaletteSchemeTests: XCTestCase {
             .black,
         ] {
             let scheme = PaletteScheme(seed: seed, configuration: light)
-            XCTAssertEqual(scheme.washStops.last, .white)
+            #expect(scheme.washStops.last == .white)
             for stop in scheme.washStops {
-                XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: stop), 4.5, "accent for \(seed)")
-                XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5, "primary for \(seed)")
-                XCTAssertGreaterThanOrEqual(scheme.secondaryText.contrast(with: stop), 4.5, "secondary for \(seed)")
+                #expect(scheme.accent.contrast(with: stop) >= 4.5, "accent for \(seed)")
+                #expect(scheme.primaryText.contrast(with: stop) >= 4.5, "primary for \(seed)")
+                #expect(scheme.secondaryText.contrast(with: stop) >= 4.5, "secondary for \(seed)")
             }
-            XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: scheme.onAccent), 4.5)
+            #expect(scheme.accent.contrast(with: scheme.onAccent) >= 4.5)
         }
 
         let yellow = PaletteScheme(seed: RGBColor(rgb: 0xFFEE55), configuration: light)
-        XCTAssertLessThan(yellow.accent.luminance, RGBColor(rgb: 0xFFEE55).luminance)
-        XCTAssertEqual(yellow.onAccent, .white)
+        #expect(yellow.accent.luminance < RGBColor(rgb: 0xFFEE55).luminance)
+        #expect(yellow.onAccent == .white)
     }
 
-    func testPrimaryTextIsLiftedWhenOnSurfaceIsNotReadableOnLightWash() {
+    @Test func primaryTextIsLiftedWhenOnSurfaceIsNotReadableOnLightWash() {
         // A mid grey onSurface reads fine on plain white but not on the tinted wash stops.
         let light = PaletteScheme.Configuration(
             surface: .white,
@@ -156,38 +157,40 @@ final class PaletteSchemeTests: XCTestCase {
             onSurfaceVariant: RGBColor(rgb: 0x999999)
         )
         let scheme = PaletteScheme(seed: .black, configuration: light)
-        XCTAssertFalse(scheme.washStops.allSatisfy { light.onSurface.contrast(with: $0) >= 4.5 })
+        #expect(!(scheme.washStops.allSatisfy { light.onSurface.contrast(with: $0) >= 4.5 }))
 
-        XCTAssertNotEqual(scheme.primaryText, light.onSurface)
-        XCTAssertLessThan(scheme.primaryText.luminance, light.onSurface.luminance)
+        #expect(scheme.primaryText != light.onSurface)
+        #expect(scheme.primaryText.luminance < light.onSurface.luminance)
         for stop in scheme.washStops {
-            XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5)
-            XCTAssertGreaterThanOrEqual(scheme.secondaryText.contrast(with: stop), 4.5)
+            #expect(scheme.primaryText.contrast(with: stop) >= 4.5)
+            #expect(scheme.secondaryText.contrast(with: stop) >= 4.5)
         }
         // Secondary falls through onSurfaceVariant to the same lifted onSurface.
-        XCTAssertEqual(scheme.secondaryText, scheme.primaryText)
+        #expect(scheme.secondaryText == scheme.primaryText)
     }
 
-    func testPrimaryTextIsLiftedTowardWhiteOnDarkWashWhenOnSurfaceIsDim() {
-        let dim = PaletteScheme.Configuration(onSurface: RGBColor(rgb: 0x707070), onSurfaceVariant: RGBColor(rgb: 0x606060))
+    @Test func primaryTextIsLiftedTowardWhiteOnDarkWashWhenOnSurfaceIsDim() {
+        let dim = PaletteScheme.Configuration(
+            onSurface: RGBColor(rgb: 0x707070), onSurfaceVariant: RGBColor(rgb: 0x606060)
+        )
         let scheme = PaletteScheme(
             seed: RGBColor(rgb: 0x2070D8),
             darkMuted: RGBColor(rgb: 0x203050),
             configuration: dim
         )
-        XCTAssertNotEqual(scheme.primaryText, dim.onSurface)
-        XCTAssertGreaterThan(scheme.primaryText.luminance, dim.onSurface.luminance)
+        #expect(scheme.primaryText != dim.onSurface)
+        #expect(scheme.primaryText.luminance > dim.onSurface.luminance)
         for stop in scheme.washStops {
-            XCTAssertGreaterThanOrEqual(scheme.primaryText.contrast(with: stop), 4.5)
+            #expect(scheme.primaryText.contrast(with: stop) >= 4.5)
         }
     }
 
-    func testPrimaryTextStaysOnSurfaceWhenAlreadyReadable() {
+    @Test func primaryTextStaysOnSurfaceWhenAlreadyReadable() {
         let scheme = PaletteScheme(seed: RGBColor(rgb: 0x2070D8), darkMuted: RGBColor(rgb: 0x101020))
-        XCTAssertEqual(scheme.primaryText, configuration.onSurface)
+        #expect(scheme.primaryText == configuration.onSurface)
     }
 
-    func testCustomConfigurationDrivesSurfaceAndThresholds() {
+    @Test func customConfigurationDrivesSurfaceAndThresholds() {
         let custom = PaletteScheme.Configuration(
             surface: RGBColor(rgb: 0x000000),
             fallbackAccent: RGBColor(rgb: 0xFF00FF),
@@ -197,13 +200,13 @@ final class PaletteSchemeTests: XCTestCase {
             minimumAccentChroma: 0.5
         )
         let scheme = PaletteScheme(seed: RGBColor(red: 0.2, green: 0.5, blue: 0.6), configuration: custom)
-        XCTAssertEqual(scheme.surface, .black)
-        XCTAssertEqual(scheme.washStops.last, .black)
+        #expect(scheme.surface == .black)
+        #expect(scheme.washStops.last == .black)
         // chroma 0.4 < 0.5, so the fallback accent is used and lifted to 7:1.
         for stop in scheme.washStops {
-            XCTAssertGreaterThanOrEqual(scheme.accent.contrast(with: stop), 7)
+            #expect(scheme.accent.contrast(with: stop) >= 7)
         }
-        XCTAssertEqual(scheme.accent, custom.fallbackAccent.readable(on: scheme.washStops, minimum: 7))
-        XCTAssertEqual(scheme.primaryText, .white)
+        #expect(scheme.accent == custom.fallbackAccent.readable(on: scheme.washStops, minimum: 7))
+        #expect(scheme.primaryText == .white)
     }
 }

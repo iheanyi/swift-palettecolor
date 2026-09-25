@@ -1,0 +1,15 @@
+# Material Color Utilities (see NOTICE). The files copied from the Swift port stay diffable against
+# upstream, and the Java ports keep Java's names and structure line for line so Android parity can be
+# audited against the reference. Only naming, size, and upstream-formatting rules are relaxed here.
+disabled_rules:
+  - identifier_name
+  - type_name
+  - cyclomatic_complexity
+  - function_body_length
+  - function_parameter_count
+  - type_body_length
+  - file_length
+  - large_tuple
+  - opening_brace
+  - shorthand_operator
+  - for_where

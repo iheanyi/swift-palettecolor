@@ -9,7 +9,7 @@ The AndroidX quantizer, target scoring and default filter are ported from Androi
 
 - Pure Swift core (no UIKit/AppKit/SwiftUI required) — builds and tests on Linux
 - `CGImage`, `UIImage`, `NSImage` and SwiftUI `Color` conveniences on Apple platforms
-- iOS 15+, macOS 12+, tvOS 15+, watchOS 8+, visionOS 1+
+- iOS 15+, macOS 12+, tvOS 15+, watchOS 8+, visionOS 1+; Swift 6 toolchain (Xcode 16+), Swift 6 language mode
 - Apache-2.0
 
 ## Installation
@@ -18,7 +18,7 @@ Add the package to `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/iheanyi/swift-palettecolor", from: "0.2.0"),
+    .package(url: "https://github.com/iheanyi/swift-palettecolor", from: "0.3.0"),
 ],
 targets: [
     .target(
@@ -226,11 +226,15 @@ The HCT, tonal palette and color math are the official Swift port with access co
 ## Development
 
 ```sh
-swift build
+swift build -Xswiftc -warnings-as-errors
 swift test
+swift package plugin --allow-writing-to-package-directory swiftlint          # lint
+swift package plugin --allow-writing-to-package-directory swiftlint --fix    # autocorrect
 ```
 
-CI runs `swift test` on Ubuntu (Swift 5.10 and 6.1) and macOS, and runs the test bundle on the iOS Simulator to cover the UIKit paths.
+Tests use [Swift Testing](https://developer.apple.com/documentation/testing). SwiftLint is a development-only dependency ([SwiftLintPlugins](https://github.com/SimplyDanny/SwiftLintPlugins), a command plugin that no target depends on, so apps that depend on PaletteColor never fetch it); the plugin asks for write access up front but only writes with `--fix`. Rules live in `.swiftlint.yml`, with naming and size rules relaxed only for the vendored Material Color Utilities code (`Sources/PaletteColor/MaterialColorUtilities/.swiftlint.yml`), which stays line-for-line comparable with upstream.
+
+CI builds with strict concurrency and warnings as errors, runs `swift test` on Ubuntu (Swift 6.0 and 6.1) and macOS, lints on macOS, and runs the tests on the iOS Simulator to cover the UIKit paths.
 
 ## License
 
